@@ -197,7 +197,6 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                         log.debug('searchParams', searchParams);
                         log.debug({title: 'form', details: form.title});
                         form = setValueSelect(form, searchParams);
-                        log.debug({title: 'form', details: form.title});
                         flagCondition = true;
                     } else if (isGNC && serverRequest.method === 'POST') {
                         flagCondition = false;
@@ -545,10 +544,8 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                                     id: idfile
                                 });
                                 log.debug("file content", loadedfile.getContents());
-
-                                serverResponse.writeFile({
-                                    file: loadedfile,
-                                    isInline: false
+                                redirect.redirect({
+                                    url: loadedfile.url
                                 });
                             }
                         }

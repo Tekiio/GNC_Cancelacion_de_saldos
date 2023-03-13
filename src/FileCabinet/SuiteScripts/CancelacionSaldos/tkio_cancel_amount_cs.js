@@ -42,10 +42,10 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
          * @since 2015.2
          */
         function pageInit(scriptContext) {
+            glbCurrentRecord = currentRecord.get();
             console.log("inicio");
             var isGNC = runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_is_gnc' });
             if (!isGNC) {
-                glbCurrentRecord = currentRecord.get();
                 ACCOUNT_COMBINATION.RecordId = 'customrecord_tkio_configuracion_cuenta';
                 ACCOUNT_COMBINATION.MAIN_ACCOUNT = 'custrecord_tkio_conf_cuenta_ajuste';
                 ACCOUNT_COMBINATION.SUB_ACCOUNT = '';//DESAPARECE
@@ -478,6 +478,18 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
             for (var index = 0; index < lineCount; index++) {
                 setSublistValue(CUSTOM_FIELDS.LISTS.LIST_ID, CUSTOM_FIELDS.LISTS.SELECT, index, false);
             }
+        }
+        function setSublistValue(sublistId, fieldId, line, value) {
+            glbCurrentRecord.selectLine({
+                sublistId: sublistId,
+                line: line
+            });
+            glbCurrentRecord.setCurrentSublistValue({
+                sublistId: sublistId,
+                fieldId: fieldId,
+                value: value,
+                line: line
+            });
         }
         function filter() {
             var currentform = currentRecord.get();

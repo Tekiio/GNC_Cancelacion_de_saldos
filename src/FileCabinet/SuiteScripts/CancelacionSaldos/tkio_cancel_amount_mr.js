@@ -15,6 +15,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
         const TRANSACTION_BODY = {};
         TRANSACTION_BODY.PROCESS = 'custbody_tkio_process_cs'
         TRANSACTION_BODY.TYPE = 'type';
+        TRANSACTION_BODY.TYPE_CUSTOM_CS = 'custbodytype_transaction_cs';
         TRANSACTION_BODY.METHOD_PAYMENT = 'custbody_mx_payment_method';
         TRANSACTION_BODY.INTERNAL_ID = 'internalid';
         TRANSACTION_BODY.MAINLINE = 'mainline';
@@ -678,7 +679,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                                 journal.setValue(TRANSACTION_BODY.TRANDATE, parsedDate); // set date
                                 journal.setValue(TRANSACTION_BODY.MEMO, params.reason); // set memo
                             }
-
+                            
                             journal.setValue(TRANSACTION_BODY.APPROVAL_STATUS, 2);
                             journal.setValue(TRANSACTION_BODY.PROCESS, true);
 
@@ -686,6 +687,20 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                             for (var line = 0; line < lineToProcess.length; line++) {
                                 var lineType = lineToProcess[line][TRANSACTION_BODY.TYPE];
                                 var tranid = lineToProcess[line][TRANSACTION_BODY.TRAN_ID];
+
+                                if (isGNC) {
+                                    var tipoTransaccion = 'Cancelación de saldos – '
+                                    if (lineType === '7' || lineType === 7) {
+                                        tipoTransaccion += 'Factura de venta';
+                                    }
+                                    if (lineType === '9' || lineType === 9) {
+                                        tipoTransaccion += 'Pago de cliente'
+                                    }
+                                    journal.setValue({
+                                        fieldId: TRANSACTION_BODY.TYPE_CUSTOM_CS,
+                                        value: tipoTransaccion
+                                    });
+                                }
 
                                 // invoice || credit billt
                                 if (!isGNC) {

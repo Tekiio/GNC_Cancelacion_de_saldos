@@ -164,8 +164,8 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
 
                 form = createPanel(isGNC, form, serverRequest, status)
                 var subList = AddSublist(form, isGNC);
-                
-                log.debug({title: 'form', details: form.title});
+
+                log.debug({ title: 'form', details: form.title });
                 if (serverRequest.parameters[CUSTOM_FIELDS.SUBSIDIARY] && serverRequest.parameters[CUSTOM_FIELDS.TRAN_TYPE] &&
                     serverRequest.parameters[CUSTOM_FIELDS.START_DATE] && serverRequest.parameters[CUSTOM_FIELDS.END_AMT] &&
                     serverRequest.parameters[CUSTOM_FIELDS.END_DATE]) {
@@ -195,7 +195,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                         }
                         searchParams = searchParamsAux;
                         log.debug('searchParams', searchParams);
-                        log.debug({title: 'form', details: form.title});
+                        log.debug({ title: 'form', details: form.title });
                         form = setValueSelect(form, searchParams);
                         flagCondition = true;
                     } else if (isGNC && serverRequest.method === 'POST') {
@@ -263,28 +263,23 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                                     });
                                     var type = 0;
                                     var typeentity = 0;
-                                    switch (name) {
-                                        case 'Factura de venta':
-                                            type = 7;
-                                            typeentity = 1;
-                                            break;
-                                        case 'Pago de cliente':
-                                            type = 9;
-                                            typeentity = 1;
-                                            break;
-                                        case 'Nota de crédito cliente':
-                                            type = 11;
-                                            typeentity = 1;
-                                            break;
-                                        case 'Factura de proveedor':
-                                            type = 13;
-                                            typeentity = 2;
-                                            break;
-                                        case 'Nota de crédito proveedor':
-                                            type = 15;
-                                            typeentity = 2;
-                                            break;
+                                    if (name === 'Factura de venta') {
+                                        type = 7;
+                                        typeentity = 1;
+                                    } else if (name === 'Pago de cliente') {
+                                        type = 9;
+                                        typeentity = 1;
+                                    } else if (name === 'Nota de crédito cliente') {
+                                        type = 11;
+                                        typeentity = 1;
+                                    } else if (name === 'Factura de proveedor') {
+                                        type = 13;
+                                        typeentity = 2;
+                                    } else if (name === 'Nota de crédito proveedor') {
+                                        type = 15;
+                                        typeentity = 2;
                                     }
+
 
 
                                     lineItems[TRANSACTION_BODY.TYPE] = type;
@@ -358,7 +353,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
 
                                     lines.push(lineItems);
                                 }
-                                log.debug({title: 'lines', details: lines});
+                                log.debug({ title: 'lines', details: lines });
                                 csv += serverRequest.getSublistValue({
                                     group: CUSTOM_FIELDS.LISTS.LIST_ID,
                                     name: CUSTOM_FIELDS.LISTS.INTERNAL_ID,
@@ -429,8 +424,8 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
 
 
                             if (searchParams.file !== 'T') {
-                                log.debug({title: 'objparam1', details: objparam1});
-                                log.debug({title: 'objparam2', details: objparam2});
+                                log.debug({ title: 'objparam1', details: objparam1 });
+                                log.debug({ title: 'objparam2', details: objparam2 });
                                 //Create task to call scheduled script
                                 var shTask = task.create({
                                     taskType: task.TaskType.MAP_REDUCE,
@@ -471,7 +466,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             }
                             var tranResults = GetTransactions(searchParams, isGNC);
                             log.audit({ title: 'tranResults', details: tranResults });
-                            log.debug({title: 'form', details: form.title});
+                            log.debug({ title: 'form', details: form.title });
                             if (!isGNC) {
                                 var totalTransactions = form.getField({
                                     id: CUSTOM_FIELDS.TOTAL_TRANS
@@ -551,14 +546,14 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                         }
                     }
                 }
-                log.debug({title: 'form', details: form.title});
+                log.debug({ title: 'form', details: form.title });
                 if (!searchParams) {
                     // serverResponse.writePage(form);
                     serverResponse.writePage({ pageObject: form });
                 } else if (searchParams.file !== 'T') {
                     // serverResponse.writePage(form);
                     serverResponse.writePage({ pageObject: form });
-                }else{
+                } else {
                     serverResponse.writePage({ pageObject: form });
                 }
             } catch (error) {
@@ -1011,7 +1006,6 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                 var searchFilters = [
                     [TRANSACTION_BODY.AMOUNT_REMAINING_ZERO, search.Operator.IS, "T"]
                 ];
-
                 if (searchParams.customer) {
                     searchFilters.push("AND", [TRANSACTION_BODY.NAME, search.Operator.ANYOF, searchParams.customer]);
                 }
@@ -1056,29 +1050,27 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                         auxrecord.push(RECORDS.INVOICE_SHORT);
                     }
                 }
-                if (searchParams.transaction_type.indexOf("11") != -1) {
+                if (searchParams.transaction_type.indexOf("11") != -1 && !isGNC) {
                     auxrecord.push(RECORDS.CREDITMEMO_SHORT);
                 }
-                if (searchParams.transaction_type.indexOf("13") != -1) {
+                if (searchParams.transaction_type.indexOf("13") != -1 && !isGNC) {
                     auxrecord.push(RECORDS.BILL_SHORT);
                 }
-                if (searchParams.transaction_type.indexOf("15") != -1) {
+                if (searchParams.transaction_type.indexOf("15") != -1 && !isGNC) {
                     auxrecord.push(RECORDS.CREDITBILL_SHORT);
                 }
                 if (!isGNC) {
                     recordFilters.push("AND", [TRANSACTION_BODY.TYPE, search.Operator.ANYOF, auxrecord]);
                     recordFilters.push("AND", [TRANSACTION_BODY.MAINLINE, search.Operator.IS, "T"]);
                 }
-
-
-                var invSearchFilters = searchFilters.concat(recordFilters)
-                var searchObj = CreateSearch(invSearchFilters, isGNC);
-
-                log.debug("searchObj", searchObj);
-                log.debug("recordFilters", recordFilters);
-
-                var results1 = GetResults(searchObj, isGNC);
-                results = results.concat(results1);
+                if (recordFilters.length !==0) {
+                    var invSearchFilters = searchFilters.concat(recordFilters)
+                    var searchObj = CreateSearch(invSearchFilters, isGNC);
+                    log.debug("searchObj", searchObj);
+                    log.debug("recordFilters", recordFilters);
+                    var results1 = GetResults(searchObj, isGNC);
+                    results = results.concat(results1);
+                }
                 log.debug({ title: 'Results Obtain: ', details: 'FLAG' });
                 if (searchParams.transaction_type.indexOf("9") != -1) {
                     recordType = searchParams.transaction_type[1];
@@ -1186,27 +1178,21 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                                 }
                                 var type = result.getValue(TRANSACTION_BODY.TYPE) || '';
                                 var typeentity = 0;
-                                switch (type) {
-                                    case RECORDS.CUSTOMER_PAYMENT_SHORT:
-                                        type = 'Pago de cliente';
-                                        typeentity = 1;
-                                        break;
-                                    case RECORDS.INVOICE_SHORT:
-                                        type = 'Factura de venta';
-                                        typeentity = 1;
-                                        break;
-                                    case RECORDS.BILL_SHORT:
-                                        type = 'Factura de proveedor';
-                                        typeentity = 2;
-                                        break;
-                                    case RECORDS.CREDITMEMO_SHORT:
-                                        type = 'Nota de crédito cliente';
-                                        typeentity = 1;
-                                        break;
-                                    case RECORDS.CREDITBILL_SHORT:
-                                        type = 'Nota de crédito proveedor';
-                                        typeentity = 2;
-                                        break;
+                                if (type === RECORDS.CUSTOMER_PAYMENT_SHORT) {
+                                    type = 'Pago de cliente';
+                                    typeentity = 1;
+                                } else if (type === RECORDS.INVOICE_SHORT) {
+                                    type = 'Factura de venta';
+                                    typeentity = 1;
+                                } else if (type === RECORDS.BILL_SHORT) {
+                                    type = 'Factura de proveedor';
+                                    typeentity = 2;
+                                } else if (type === RECORDS.CREDITMEMO_SHORT) {
+                                    type = 'Nota de crédito cliente';
+                                    typeentity = 1;
+                                } else if (type === RECORDS.CREDITBILL_SHORT) {
+                                    type = 'Nota de crédito proveedor';
+                                    typeentity = 2;
                                 }
 
                                 res[CUSTOM_FIELDS.LISTS.TRANS_TYPE] = type;

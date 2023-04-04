@@ -1,5 +1,5 @@
 /**
- * @NApiVersion 2.x
+ * @NApiVersion 2.1
  * @NScriptType ClientScript
  * @NModuleScope SameAccount
  */
@@ -42,6 +42,8 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
          * @since 2015.2
          */
         function pageInit(scriptContext) {
+            // var mensajeInfo = message.create({ type: message.Type.WARNING, title: "EN MANTENIMIENTO", message: "Se esta optimizando el codigo." });
+            // mensajeInfo.show({ duration: 4000 });
             glbCurrentRecord = currentRecord.get();
             console.log("inicio");
             var isGNC = runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_is_gnc' });
@@ -95,6 +97,25 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
          * @since 2015.2
          */
         function fieldChanged(scriptContext) {
+            try {
+                let currentForm = currentRecord.get();
+                if (scriptContext.fieldId === 'custpage_pagination') {
+                    var parametros = JSON.parse(currentForm.getValue({ fieldId: "custpage_params" }));
+                    var paginacion = currentForm.getValue({ fieldId: "custpage_pagination" });
+                    parametros.custpage_pagination = paginacion
+                    var direccion = url.resolveScript({
+                        deploymentId: "customdeploy_tkio_cs_cancel_amount_sl",
+                        scriptId: "customscript_tkio_cs_cancel_amount_sl",
+                        params: {
+                            params: JSON.stringify(parametros)
+                         },
+                        returnExternalUrl: false
+                    });
+                    window.open(direccion, '_self')                
+                }
+            } catch (e) {
+                console.log({ title: 'Error fieldChange:', details: e });
+            }
 
         }
 
@@ -547,7 +568,6 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
         }
 
         return {
-            // fieldChanged: fieldChanged,
             // postSourcing: postSourcing,
             // sublistChanged: sublistChanged,
             // lineInit: lineInit,
@@ -555,6 +575,7 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
             // validateInsert: validateInsert,
             // validateDelete: validateDelete,
             pageInit: pageInit,
+            fieldChanged: fieldChanged,
             validateField: validateField,
             saveRecord: saveRecord,
             excel: excel,

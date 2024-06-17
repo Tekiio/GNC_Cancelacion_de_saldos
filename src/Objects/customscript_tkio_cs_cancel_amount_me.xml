@@ -115,15 +115,43 @@
       <setting>COMPANY</setting>
       <storevalue>T</storevalue>
     </scriptcustomfield>
+    <scriptcustomfield scriptid="custscript_tkio_is_gnc_mr">
+      <accesslevel>2</accesslevel>
+      <applyformatting>F</applyformatting>
+      <checkspelling>F</checkspelling>
+      <defaultchecked>F</defaultchecked>
+      <defaultselection></defaultselection>
+      <defaultvalue></defaultvalue>
+      <description>Campo utilizado para verificar el tipo de script en la instancia a utilizar.</description>
+      <displayheight></displayheight>
+      <displaytype>NORMAL</displaytype>
+      <displaywidth></displaywidth>
+      <dynamicdefault></dynamicdefault>
+      <fieldtype>CHECKBOX</fieldtype>
+      <help>Campo utilizado para verificar el tipo de script en la instancia a utilizar.</help>
+      <isformula>F</isformula>
+      <ismandatory>F</ismandatory>
+      <label>GNC</label>
+      <linktext></linktext>
+      <maxlength></maxlength>
+      <maxvalue></maxvalue>
+      <minvalue></minvalue>
+      <onparentdelete></onparentdelete>
+      <searchlevel>2</searchlevel>
+      <selectrecordtype></selectrecordtype>
+      <setting></setting>
+      <storevalue>T</storevalue>
+    </scriptcustomfield>
   </scriptcustomfields>
   <scriptdeployments>
     <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr2">
       <buffersize>1</buffersize>
-      <concurrencylimit>1</concurrencylimit>
+      <concurrencylimit>7</concurrencylimit>
       <custscript_ss_lines></custscript_ss_lines>
       <custscript_ss_params></custscript_ss_params>
-      <custscript_tkio_cancel_folder></custscript_tkio_cancel_folder>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
       <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
@@ -141,11 +169,12 @@
     </scriptdeployment>
     <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr3">
       <buffersize>1</buffersize>
-      <concurrencylimit>1</concurrencylimit>
+      <concurrencylimit>7</concurrencylimit>
       <custscript_ss_lines></custscript_ss_lines>
       <custscript_ss_params></custscript_ss_params>
-      <custscript_tkio_cancel_folder></custscript_tkio_cancel_folder>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
       <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
@@ -163,11 +192,12 @@
     </scriptdeployment>
     <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr">
       <buffersize>1</buffersize>
-      <concurrencylimit>1</concurrencylimit>
+      <concurrencylimit>7</concurrencylimit>
       <custscript_ss_lines></custscript_ss_lines>
       <custscript_ss_params></custscript_ss_params>
-      <custscript_tkio_cancel_folder></custscript_tkio_cancel_folder>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
       <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
@@ -183,35 +213,37 @@
         </single>
       </recurrence>
     </scriptdeployment>
-    <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr5">
+    <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr6">
       <buffersize>1</buffersize>
-      <concurrencylimit>1</concurrencylimit>
+      <concurrencylimit>7</concurrencylimit>
       <custscript_ss_lines></custscript_ss_lines>
       <custscript_ss_params></custscript_ss_params>
-      <custscript_tkio_cancel_folder></custscript_tkio_cancel_folder>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
       <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
       <runasrole>ADMINISTRATOR</runasrole>
       <status>NOTSCHEDULED</status>
-      <title>CS -  Cancel amount MR AUTH 5</title>
+      <title>CS - Cancel amount MR AUTH 6</title>
       <yieldaftermins>60</yieldaftermins>
       <recurrence>
         <single>
           <repeat></repeat>
-          <startdate>2022-06-16</startdate>
-          <starttime>23:00:00Z</starttime>
+          <startdate>2023-04-19</startdate>
+          <starttime>01:00:00Z</starttime>
         </single>
       </recurrence>
     </scriptdeployment>
     <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr1">
       <buffersize>1</buffersize>
-      <concurrencylimit>1</concurrencylimit>
+      <concurrencylimit>7</concurrencylimit>
       <custscript_ss_lines></custscript_ss_lines>
       <custscript_ss_params></custscript_ss_params>
-      <custscript_tkio_cancel_folder></custscript_tkio_cancel_folder>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
       <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
@@ -229,17 +261,41 @@
     </scriptdeployment>
     <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr4">
       <buffersize>1</buffersize>
-      <concurrencylimit>1</concurrencylimit>
+      <concurrencylimit>7</concurrencylimit>
       <custscript_ss_lines></custscript_ss_lines>
       <custscript_ss_params></custscript_ss_params>
-      <custscript_tkio_cancel_folder></custscript_tkio_cancel_folder>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
       <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
       <runasrole>ADMINISTRATOR</runasrole>
       <status>NOTSCHEDULED</status>
       <title>CS -  Cancel amount MR AUTH 4</title>
+      <yieldaftermins>60</yieldaftermins>
+      <recurrence>
+        <single>
+          <repeat></repeat>
+          <startdate>2022-06-16</startdate>
+          <starttime>23:00:00Z</starttime>
+        </single>
+      </recurrence>
+    </scriptdeployment>
+    <scriptdeployment scriptid="customdeploy_tkio_cancel_amount_mr5">
+      <buffersize>1</buffersize>
+      <concurrencylimit>7</concurrencylimit>
+      <custscript_ss_lines></custscript_ss_lines>
+      <custscript_ss_params></custscript_ss_params>
+      <custscript_tkio_cancel_folder>11006</custscript_tkio_cancel_folder>
+      <custscript_tkio_cs_sender></custscript_tkio_cs_sender>
+      <custscript_tkio_is_gnc_mr>F</custscript_tkio_is_gnc_mr>
+      <isdeployed>T</isdeployed>
+      <loglevel>DEBUG</loglevel>
+      <queueallstagesatonce>T</queueallstagesatonce>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>NOTSCHEDULED</status>
+      <title>CS -  Cancel amount MR AUTH 5</title>
       <yieldaftermins>60</yieldaftermins>
       <recurrence>
         <single>

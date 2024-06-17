@@ -1,5 +1,5 @@
 /**
- * @NApiVersion 2.x
+ * @NApiVersion 2.1
  * @NScriptType MapReduceScript
  * @param {record} record
  * @param {search} search
@@ -67,102 +67,122 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                 var lineToProcess = runtime.getCurrentScript().getParameter({ name: 'custscript_ss_lines' });
                 var params = runtime.getCurrentScript().getParameter({ name: 'custscript_ss_params' });
 
-                log.debug("lines to process: ", lineToProcess);
-                log.debug("Parameters: ", params);
-                log.debug("isGNC: ", isGNC);
-                log.debug("isGNC: ", typeof isGNC);
+                // log.debug("lines to process: ", lineToProcess);
+                // log.debug("Parameters: ", params);
+                // log.debug("isGNC: ", isGNC);
+                // log.debug("isGNC: ", typeof isGNC);
 
                 lineToProcess = JSON.parse(lineToProcess);
                 params = JSON.parse(params);
 
                 initializationConstantAccountCombination(isGNC)
-                var jetranresults = {}; //searchExistedJE(lineToProcess);
-                var accountConfigurations = GetConfigurations(params.subsidiary, isGNC);
-
-                log.debug("accountConfigurations", accountConfigurations);
-                var transactionsbycustomer = createJournalEntry(params, lineToProcess, accountConfigurations, jetranresults, isGNC);
+                log.audit({ title: 'Cantidad de Lineas a procesar:', details: lineToProcess.length });
+                var transactionsbycustomer = groupByCustomer(lineToProcess);
                 var newLineToProcess = [];
                 for (var s in transactionsbycustomer) {
                     for (var i in transactionsbycustomer[s]) {
-                        var transactionsCustomer = transactionsbycustomer[s][i];
-                        for (var j in transactionsCustomer) {
-                            newLineToProcess.push(transactionsCustomer[j]);
-                        }
+                        var trandsCustomer = transactionsbycustomer[s][i];
+                        var transactionsCustomer = bloques(trandsCustomer, 50);
+                        transactionsCustomer.forEach((bloq1) => {
+                            newLineToProcess.push({ id: i, arr: bloq1 });
+                        })
                     }
                 }
-                log.debug("newLineToProcess", newLineToProcess);
+                log.debug("Agrupador por Cliente: ", newLineToProcess);
+                log.debug("No de clientes: ", newLineToProcess.length);
                 return newLineToProcess;
             } catch (e) {
                 log.error({ title: 'Error getInputData:', details: e });
             }
         }
-
+        function bloques(data, bloq) {
+            try {
+                const BLOCK_RESULTS = bloq;
+                log.audit('getInputData ~ BLOCK_RESULTS:', BLOCK_RESULTS)
+                const BLOCKS_DATA = []
+                for (let i = 0; i < data.length; i += BLOCK_RESULTS) {
+                    const block = data.slice(i, i + BLOCK_RESULTS)
+                    if (block.length > 0) {
+                        BLOCKS_DATA.push(block)
+                    }
+                }
+                return BLOCKS_DATA
+            } catch (e) {
+                log.error({ title: 'Error bloques:', details: e });
+            }
+        }
         function map(context) {
             try {
-                log.debug('map', context);
+                var isGNC = (runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_is_gnc_mr' }) === 'true' ? true : false);
+                var params = JSON.parse(runtime.getCurrentScript().getParameter({ name: 'custscript_ss_params' }));
+                // log.debug('map', context);
                 log.debug('map value', context.value);
-                var lineToProcess = JSON.parse(context.value);
+                log.debug('Is GNC', isGNC);
 
-                if (lineToProcess.je && !lineToProcess.errorname) {
-                    var jeinfo = fieldLookUp = search.lookupFields({
-                        type: search.Type.JOURNAL_ENTRY,
-                        id: lineToProcess.je,
-                        columns: ['tranid']
+                var arrCustomer = JSON.parse(context.value);
+                // var params = arrCustomer.params;
+                var lineToProcessAux = arrCustomer.arr
+                log.audit({ title: 'lineToProcessAux.length', details: lineToProcessAux.length });
+                var jetranresults = {}; //searchExistedJE(lineToProcess);
+                initializationConstantAccountCombination(isGNC)
+                var accountConfigurations = GetConfigurations(params.subsidiary, isGNC);
+                var lineToProcessArr = createJournalEntry(params, lineToProcessAux, accountConfigurations, jetranresults, isGNC)
+                log.audit({ title: 'lineToProcessArr', details: lineToProcessArr });
+                for (var i = 0; i < lineToProcessArr.length; i++) {
+                    var lineToProcess = lineToProcessArr[i]
+                    if (lineToProcess.je && !lineToProcess.errorname) {
+                        var jeinfo = fieldLookUp = search.lookupFields({
+                            type: search.Type.JOURNAL_ENTRY,
+                            id: lineToProcess.je,
+                            columns: ['tranid']
+                        });
+                        lineToProcess.tranidje = jeinfo['tranid'];
+                    }
+                    else {
+                        lineToProcess.tranidje = '-';
+                    }
+
+                    if (lineToProcess[TRANSACTION_BODY.SUBSIDIARY]) {
+                        var subinfo = fieldLookUp = search.lookupFields({ type: search.Type.SUBSIDIARY, id: lineToProcess[TRANSACTION_BODY.SUBSIDIARY], columns: ['name'] });
+                        lineToProcess.subsidiaryname = subinfo['name'];
+                    }
+                    else {
+                        lineToProcess.subsidiaryname = '-';
+                    }
+
+                    var trantype = lineToProcess.type;
+                    var recordType = '';
+                    if (trantype == 7 || trantype == "7") {
+                        recordType = record.Type.INVOICE;
+                    }
+                    else if (trantype == 9 || trantype == "9") {
+                        recordType = record.Type.CUSTOMER_PAYMENT;
+                    }
+                    else if (trantype == 11 || trantype == "11") {
+                        recordType = record.Type.CREDIT_MEMO;
+                    }
+                    else if (trantype == 13 || trantype == "13") {
+                        recordType = record.Type.VENDOR_BILL;
+                    }
+                    else if (trantype == 15 || trantype == "15") {
+                        recordType = record.Type.VENDOR_CREDIT;
+                    }
+
+                    if (lineToProcess[TRANSACTION_BODY.NAME]) {
+                        var subinfo = fieldLookUp = search.lookupFields({ type: recordType, id: lineToProcess[TRANSACTION_BODY.INTERNAL_ID], columns: ['entity'] });
+                        // log.debug("map subinfo", subinfo);
+                        lineToProcess.customername = subinfo['entity'][0].text;
+                    }
+                    else {
+                        lineToProcess.customername = '-';
+                    }
+
+                    var lineType = lineToProcess[TRANSACTION_BODY.TYPE];
+                    context.write({
+                        key: lineToProcess[TRANSACTION_BODY.INTERNAL_ID],
+                        value: lineToProcess
                     });
-                    lineToProcess.tranidje = jeinfo['tranid'];
                 }
-                else {
-                    lineToProcess.tranidje = '-';
-                }
-
-                if (lineToProcess[TRANSACTION_BODY.SUBSIDIARY]) {
-                    var subinfo = fieldLookUp = search.lookupFields({
-                        type: search.Type.SUBSIDIARY,
-                        id: lineToProcess[TRANSACTION_BODY.SUBSIDIARY],
-                        columns: ['name']
-                    });
-                    lineToProcess.subsidiaryname = subinfo['name'];
-                }
-                else {
-                    lineToProcess.subsidiaryname = '-';
-                }
-
-                var trantype = lineToProcess.type;
-                var recordType = '';
-                if (trantype == 7 || trantype == "7") {
-                    recordType = record.Type.INVOICE;
-                }
-                else if (trantype == 9 || trantype == "9") {
-                    recordType = record.Type.CUSTOMER_PAYMENT;
-                }
-                else if (trantype == 11 || trantype == "11") {
-                    recordType = record.Type.CREDIT_MEMO;
-                }
-                else if (trantype == 13 || trantype == "13") {
-                    recordType = record.Type.VENDOR_BILL;
-                }
-                else if (trantype == 15 || trantype == "15") {
-                    recordType = record.Type.VENDOR_CREDIT;
-                }
-
-                if (lineToProcess[TRANSACTION_BODY.NAME]) {
-                    var subinfo = fieldLookUp = search.lookupFields({
-                        type: recordType,
-                        id: lineToProcess[TRANSACTION_BODY.INTERNAL_ID],
-                        columns: ['entity']
-                    });
-                    log.debug("map subinfo", subinfo);
-                    lineToProcess.customername = subinfo['entity'][0].text;
-                }
-                else {
-                    lineToProcess.customername = '-';
-                }
-
-                var lineType = lineToProcess[TRANSACTION_BODY.TYPE];
-                context.write({
-                    key: lineToProcess[TRANSACTION_BODY.INTERNAL_ID],
-                    value: lineToProcess
-                });
             }
             catch (e) {
                 log.error("map", e);
@@ -170,21 +190,21 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
         }
 
         function reduce(context) {
+            var processLine = [];
             var paymentid = 0;
             var recordType = 0;
             try {
-                log.debug('reduce', context);
-                log.debug('reduce value', context.values);
+                log.debug('reduce', { context: context, values: context.values });
 
                 var isGNC = (runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_is_gnc_mr' }) === 'true' ? true : false);
                 var params = runtime.getCurrentScript().getParameter({ name: 'custscript_ss_params' });
-                log.debug('reduce params:', params);
-                log.debug('reduce isGNC:', isGNC);
-                log.debug('reduce isGNC:', typeof isGNC);
+                // log.debug('reduce params:', params);
+                // log.debug('reduce isGNC:', isGNC);
+                // log.debug('reduce isGNC:', typeof isGNC);
                 params = JSON.parse(params);
                 initializationConstantAccountCombination(isGNC);
                 var accountConfigurations = GetConfigurations(params.subsidiary, isGNC)
-                log.debug('reduce accountConfigurations: ', accountConfigurations);
+                // log.debug('reduce accountConfigurations: ', accountConfigurations);
 
 
                 var lineToProcess = [];
@@ -230,10 +250,11 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
 
                 log.debug('reduce lineToProcess', lineToProcess);
 
+                processLine = lineToProcess
                 var jvId = lineToProcess[0].je;
                 if (je) {
                     var idtransaction = CreateCustomerPayment(params, lineToProcess, accountConfigurations, je);
-                    log.debug("reduce ID saved transaction", idtransaction);
+                    log.debug({ titles: "reduce ID saved transaction", details: idtransaction });
 
                     var fieldLookUp = search.lookupFields({
                         type: recordType,
@@ -257,7 +278,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
             } catch (error) {
                 log.error({
                     title: "Reduce error",
-                    details: error
+                    details: { Error_description: error, linea_Afectada: processLine }
                 });
 
                 if (error.name != 'RCRD_DSNT_EXIST') {
@@ -389,9 +410,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
 
         function summarize(summary) {
             try {
-                log.debug('summarize inputSummary', summary.inputSummary);
-                log.debug('summarize mapSummary', summary.mapSummary);
-                log.debug('summarize reduceSummary', summary.reduceSummary);
+                log.debug({ title: 'summarize inputSummary', details: summary.inputSummary });
+                log.debug({ title: 'summarize mapSummary', details: summary.mapSummary });
+                log.debug({ title: 'summarize reduceSummary', details: summary.reduceSummary });
                 var userObj = runtime.getCurrentUser();
                 var employee = userObj.name;
                 var date = new Date();
@@ -553,10 +574,8 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                 csv += "Total con error," + errortotal + "\n";
                 csv += csvaux;
 
-                var folder = runtime.getCurrentScript().getParameter({
-                    name: 'custscript_tkio_cancel_folder'
-                });
-
+                var folder = runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_cancel_folder' });
+                log.audit({ title: 'Parametros para archivo:', details: { Idfolder: folder } });
                 var filebane = date.getTime();
                 var fileObj = file.create({
                     name: filebane + '.csv',
@@ -620,21 +639,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                 log.error({ title: 'Error initializationConstantAccountCombination:', details: e });
             }
         }
-        function createJournalEntry(params, originalLinesToProcess, accountConfigurations, resultsJE, isGNC) {
+        function groupByCustomer(originalLinesToProcess) {
             try {
-                // format a date
-                var configRecObj = config.load({
-                    type: config.Type.USER_PREFERENCES
-                });
-                var dateFormat = configRecObj.getValue({
-                    fieldId: 'DATEFORMAT'
-                });
-                var date = new Date();
-                log.debug({ title: 'map  dateFormat', details: dateFormat });
 
-                var mydateobject = moment(date, dateFormat).toDate();
-
-                var parsedDate = format.parse({ value: (isGNC ? params.trandate : mydateobject), type: format.Type.DATE });
                 var linesbycustomer = {};
 
                 for (var i in originalLinesToProcess) {
@@ -648,267 +655,256 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                 }
                 log.debug("createJournalEntry by customer", linesbycustomer);
 
-                var countimpacts = 0;
-                var countje = 0;
-
-                for (var s in linesbycustomer) {
-                    if (countje <= 300) {
-                        for (var c in linesbycustomer[s]) {
-                            var lineToProcess = linesbycustomer[s][c];
-
-                            // create a journal entry
-                            var journal = record.create({
-                                type: record.Type.JOURNAL_ENTRY,
-                                isDynamic: true
-                            });
-                            log.debug({ title: 's', details: s });
-                            log.debug({ title: 'Tipo s:', details: typeof s });
-                            log.debug('createJournalEntry params', params);
-                            log.debug('createJournalEntry lineToProcess', lineToProcess);
-                            log.debug('createJournalEntry accountConfigurations', accountConfigurations);
-
-                            // set subsidiary
-                            journal.setValue({
-                                fieldId: TRANSACTION_BODY.SUBSIDIARY,
-                                value: s
-                            });
-                            if (!isGNC) {
-                                log.debug('parsedDate', parsedDate);
-                                log.debug('params.reason', params.reason);
-                                //set the values in the required fields in JE main section
-                                journal.setValue(TRANSACTION_BODY.TRANDATE, parsedDate); // set date
-                                journal.setValue(TRANSACTION_BODY.MEMO, params.reason); // set memo
-                            }
-                            
-                            journal.setValue(TRANSACTION_BODY.APPROVAL_STATUS, 2);
-                            journal.setValue(TRANSACTION_BODY.PROCESS, true);
-
-                            var countLine = 0;
-                            for (var line = 0; line < lineToProcess.length; line++) {
-                                var lineType = lineToProcess[line][TRANSACTION_BODY.TYPE];
-                                var tranid = lineToProcess[line][TRANSACTION_BODY.TRAN_ID];
-
-                                if (isGNC) {
-                                    var tipoTransaccion = 'Cancelación de saldos – '
-                                    if (lineType === '7' || lineType === 7) {
-                                        tipoTransaccion += 'Factura de venta';
-                                    }
-                                    if (lineType === '9' || lineType === 9) {
-                                        tipoTransaccion += 'Pago de cliente'
-                                    }
-                                    journal.setValue({
-                                        fieldId: TRANSACTION_BODY.TYPE_CUSTOM_CS,
-                                        value: tipoTransaccion
-                                    });
-                                }
-
-                                // invoice || credit billt
-                                if (!isGNC) {
-                                    if (resultsJE[tranid]) {
-                                        lineToProcess[line].je = resultsJE[tranid].id;
-                                        lineToProcess[line].tranidje = resultsJE[tranid].tranid;
-                                        continue;
-                                    }
-                                    log.debug("line " + line, lineToProcess[line][TRANSACTION_BODY.IS_INACTIVE]);
-                                    if (lineToProcess[line][TRANSACTION_BODY.IS_INACTIVE] == true || lineToProcess[line][TRANSACTION_BODY.IS_INACTIVE] == 'true') {
-                                        lineToProcess[line].errorname = 'CUSTOMER_INACTIVE';
-                                        lineToProcess[line].errormsg = 'El cliente se encuentra inactivo.';
-                                        continue;
-                                    }
-                                }
-
-                                if (lineType === 7 || lineType == 15) {
-                                    log.debug('Invoice Credit ', "ACCOUNT:" + lineToProcess[line][TRANSACTION_BODY.ACCOUNT] + "; AMOUNT: " + lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
-                                    journal.selectNewLine(TRANSACTION_LINE.LINE_ID);
-                                    //Set the value for the field in the currently selected line.
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, lineToProcess[line][TRANSACTION_BODY.ACCOUNT]);
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CREDIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
-                                    if (isGNC) {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, lineToProcess[line][TRANSACTION_BODY.CLASS]);//accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, lineToProcess[line][TRANSACTION_BODY.DEPARTMENT]);//accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, lineToProcess[line][TRANSACTION_BODY.INTER_COMPANY]);
-                                        log.debug("interco", TRANSACTION_LINE.LINE_ID + " " + TRANSACTION_LINE.INTER_COMPANY + " " + lineToProcess[line][TRANSACTION_BODY.INTER_COMPANY]);
-                                    } else {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
-                                    }
-                                    //Commits the currently selected line on a sublist.
-                                    journal.commitLine('line');
-
-                                    log.debug('Invoice Debit ', "ACCOUNT:" + (isGNC ? accountConfigurations[ACCOUNT_COMBINATION.MAIN_ACCOUNT] : accountConfigurations[s][ACCOUNT_COMBINATION.MAIN_ACCOUNT]) + "; AMOUNT: " + lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
-                                    // Debit Line
-                                    journal.selectNewLine('line');
-                                    //Set the value for the field in the currently selected line.
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, (isGNC ? accountConfigurations[ACCOUNT_COMBINATION.SUB_ACCOUNT] : accountConfigurations[s][ACCOUNT_COMBINATION.MAIN_ACCOUNT])); // account from custom record
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEBIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
-                                    if (isGNC) {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, accountConfigurations[ACCOUNT_COMBINATION.INTER_COMPANY]);
-                                    } else {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
-                                    }
-                                    //Commits the currently selected line on a sublist.
-                                    journal.commitLine('line');
-                                }
-
-                                // customer payment || Credit memo || vendor bill
-                                if (lineType === 9 || lineType === 11 || lineType == 13) {
-                                    log.debug('Payment Debit Amount', lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
-                                    journal.selectNewLine(TRANSACTION_LINE.LINE_ID);
-                                    //Set the value for the field in the currently selected line.
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, lineToProcess[line][TRANSACTION_BODY.ACCOUNT]);
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEBIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
-                                    if (isGNC) {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, lineToProcess[line][TRANSACTION_BODY.CLASS]);//accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, lineToProcess[line][TRANSACTION_BODY.DEPARTMENT]);//accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, lineToProcess[line][TRANSACTION_BODY.INTER_COMPANY]);
-                                    } else {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
-                                    }
-                                    //Commits the currently selected line on a sublist.
-                                    journal.commitLine('line');
-
-                                    log.debug('Payment credit Amount', lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
-                                    // credit Line
-                                    journal.selectNewLine('line');
-                                    //Set the value for the field in the currently selected line.
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, (isGNC ? accountConfigurations[ACCOUNT_COMBINATION.SUB_ACCOUNT] : accountConfigurations[s][ACCOUNT_COMBINATION.MAIN_ACCOUNT])); // account from custom record
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CREDIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
-                                    journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
-                                    if (isGNC) {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, accountConfigurations[ACCOUNT_COMBINATION.INTER_COMPANY]);
-                                    } else {
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
-                                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
-                                    }
-                                    //Commits the currently selected line on a sublist.
-                                    journal.commitLine('line');
-                                }
-                                if (!isGNC) {
-                                    lineToProcess[line].jelines = [];
-                                    lineToProcess[line].jelines.push(countLine);
-                                    lineToProcess[line].jelines.push(countLine + 1);
-                                    countLine += 2;
-                                }
-                                countimpacts++;
-                            }
-                            //save the record.
-                            var jvId = 0;
-                            var jsvError = {
-                                errorname: '',
-                                errormsg: ''
-                            };
-                            try {
-                                if (countimpacts > 0) {
-                                    jvId = journal.save();
-                                }
-
-                            } catch (error) {
-                                jsvError.errorname = error.name;
-                                jsvError.errormsg = error.message;
-                                log.error('SAVE JE', error);
-                            }
-
-                            log.debug('jvId ' + c, jvId);
-                            for (var line in lineToProcess) {
-                                if (jvId) {
-                                    lineToProcess[line].je = jvId;
-                                }
-                                else {
-                                    lineToProcess[line].je = 0;
-                                    lineToProcess[line].errorname = (!lineToProcess[line].errorname) ? jsvError.errorname : lineToProcess[line].errorname;
-                                    lineToProcess[line].errormsg = (!lineToProcess[line].errorname) ? jsvError.errormsg : lineToProcess[line].errormsg;
-                                }
-                            }
-                            countje++;
-                        }
-                    }
-                    else {
-                        for (var c in linesbycustomer[s]) {
-                            var lineToProcess = linesbycustomer[s][c];
-                            for (var line in lineToProcess) {
-                                lineToProcess[line].je = 0;
-                                lineToProcess[line].errorname = "LIMITEDEXCED_EXECUTION";
-                                lineToProcess[line].errormsg = "Se ha excedido el limite de polizas a crear por ejecución.";
-                            }
-                        }
-                    }
-
-
-                }
 
                 return linesbycustomer;
             } catch (error) {
                 log.debug('Error createJournalEntry: ', error);
             }
         }
+        function createJournalEntry(params, lineToProcess, accountConfigurations, resultsJE, isGNC) {
+            try {
+                log.audit({ title: 'Parametros:', details: { isGNC: isGNC, params: params } });
+                var data = lineToProcess[0]
+                // format a date
+                var configRecObj = config.load({ type: config.Type.USER_PREFERENCES });
+                var dateFormat = configRecObj.getValue({ fieldId: 'DATEFORMAT' });
+                var date = new Date();
+                var mydateobject = moment(date, dateFormat).toDate();
+                var parsedDate = format.parse({ value: (isGNC ? params.trandate : mydateobject), type: format.Type.DATE });
 
+                log.audit({ title: 'parsedDate', details: parsedDate });
+                // create a journal entry
+                var journal = record.create({ type: record.Type.JOURNAL_ENTRY, isDynamic: true });
+
+                // set subsidiary
+                var s = data.subsidiary;
+                journal.setValue({ fieldId: TRANSACTION_BODY.SUBSIDIARY, value: s });
+                //set the values in the required fields in JE main section
+                journal.setValue(TRANSACTION_BODY.TRANDATE, parsedDate); // set date
+                journal.setValue(TRANSACTION_BODY.MEMO, params.reason); // set memo
+
+                journal.setValue(TRANSACTION_BODY.APPROVAL_STATUS, 2);
+                journal.setValue(TRANSACTION_BODY.PROCESS, true);
+
+                var countimpacts = 0;
+                var countLine = 0;
+                for (var line = 0; line < lineToProcess.length; line++) {
+                    var lineType = lineToProcess[line][TRANSACTION_BODY.TYPE];
+                    var tranid = lineToProcess[line][TRANSACTION_BODY.TRAN_ID];
+
+                    if (isGNC) {
+                        var tipoTransaccion = 'Cancelación de saldos – '
+                        if (lineType === '7' || lineType === 7) {
+                            tipoTransaccion += 'Factura de venta';
+                        }
+                        if (lineType === '9' || lineType === 9) {
+                            tipoTransaccion += 'Pago de cliente'
+                        }
+                        journal.setValue({
+                            fieldId: TRANSACTION_BODY.TYPE_CUSTOM_CS,
+                            value: tipoTransaccion
+                        });
+                    }
+
+                    // invoice || credit billt
+                    if (!isGNC) {
+                        if (resultsJE[tranid]) {
+                            lineToProcess[line].je = resultsJE[tranid].id;
+                            lineToProcess[line].tranidje = resultsJE[tranid].tranid;
+                            continue;
+                        }
+                        log.debug("line " + line, lineToProcess[line][TRANSACTION_BODY.IS_INACTIVE]);
+                        if (lineToProcess[line][TRANSACTION_BODY.IS_INACTIVE] == true || lineToProcess[line][TRANSACTION_BODY.IS_INACTIVE] == 'true') {
+                            lineToProcess[line].errorname = 'CUSTOMER_INACTIVE';
+                            lineToProcess[line].errormsg = 'El cliente se encuentra inactivo.';
+                            continue;
+                        }
+                    }
+
+                    if (lineType === 7 || lineType == 15) {
+                        // log.debug('Invoice Credit ', "ACCOUNT:" + lineToProcess[line][TRANSACTION_BODY.ACCOUNT] + "; AMOUNT: " + lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
+                        journal.selectNewLine(TRANSACTION_LINE.LINE_ID);
+                        //Set the value for the field in the currently selected line.
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, lineToProcess[line][TRANSACTION_BODY.ACCOUNT]);
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CREDIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
+                        if (isGNC) {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, lineToProcess[line][TRANSACTION_BODY.CLASS]);//accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, lineToProcess[line][TRANSACTION_BODY.DEPARTMENT]);//accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, lineToProcess[line][TRANSACTION_BODY.INTER_COMPANY]);
+                            // log.debug("interco", TRANSACTION_LINE.LINE_ID + " " + TRANSACTION_LINE.INTER_COMPANY + " " + lineToProcess[line][TRANSACTION_BODY.INTER_COMPANY]);
+                        } else {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
+                        }
+                        //Commits the currently selected line on a sublist.
+                        journal.commitLine('line');
+
+                        // log.debug('Invoice Debit ', "ACCOUNT:" + (isGNC ? accountConfigurations[ACCOUNT_COMBINATION.MAIN_ACCOUNT] : accountConfigurations[s][ACCOUNT_COMBINATION.MAIN_ACCOUNT]) + "; AMOUNT: " + lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
+                        // Debit Line
+                        journal.selectNewLine('line');
+                        //Set the value for the field in the currently selected line.
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, (isGNC ? accountConfigurations[ACCOUNT_COMBINATION.SUB_ACCOUNT] : accountConfigurations[s][ACCOUNT_COMBINATION.MAIN_ACCOUNT])); // account from custom record
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEBIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
+                        if (isGNC) {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, accountConfigurations[ACCOUNT_COMBINATION.INTER_COMPANY]);
+                        } else {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
+                        }
+                        //Commits the currently selected line on a sublist.
+                        journal.commitLine('line');
+                    }
+
+                    // customer payment || Credit memo || vendor bill
+                    if (lineType === 9 || lineType === 11 || lineType == 13) {
+                        // log.debug('Payment Debit Amount', lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
+                        journal.selectNewLine(TRANSACTION_LINE.LINE_ID);
+                        //Set the value for the field in the currently selected line.
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, lineToProcess[line][TRANSACTION_BODY.ACCOUNT]);
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEBIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
+                        if (isGNC) {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, lineToProcess[line][TRANSACTION_BODY.CLASS]);//accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, lineToProcess[line][TRANSACTION_BODY.DEPARTMENT]);//accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, lineToProcess[line][TRANSACTION_BODY.INTER_COMPANY]);
+                        } else {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
+                        }
+                        //Commits the currently selected line on a sublist.
+                        journal.commitLine('line');
+
+                        // log.debug('Payment credit Amount', lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]);
+                        // credit Line
+                        journal.selectNewLine('line');
+                        //Set the value for the field in the currently selected line.
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ACCOUNT, (isGNC ? accountConfigurations[ACCOUNT_COMBINATION.SUB_ACCOUNT] : accountConfigurations[s][ACCOUNT_COMBINATION.MAIN_ACCOUNT])); // account from custom record
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.ENTITY, lineToProcess[line][TRANSACTION_BODY.NAME]);
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CREDIT, parseFloat(lineToProcess[line][TRANSACTION_BODY.AMOUNT_REMAINING]));
+                        journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LINKED_TRANSACTION, lineToProcess[line][TRANSACTION_BODY.INTERNAL_ID]);
+                        if (isGNC) {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CLASSS, accountConfigurations[ACCOUNT_COMBINATION.CLASS]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.INTER_COMPANY, accountConfigurations[ACCOUNT_COMBINATION.INTER_COMPANY]);
+                        } else {
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.LOCATION, accountConfigurations[s][ACCOUNT_COMBINATION.LOCATION]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.CHANEL, accountConfigurations[s][ACCOUNT_COMBINATION.CHANEL]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.MEMO, lineToProcess[line][TRANSACTION_BODY.TRAN_ID]);
+                            journal.setCurrentSublistValue(TRANSACTION_LINE.LINE_ID, TRANSACTION_LINE.DEPARTMENT, accountConfigurations[s][ACCOUNT_COMBINATION.DEPARTMENT]);
+                        }
+                        //Commits the currently selected line on a sublist.
+                        journal.commitLine('line');
+                    }
+                    if (!isGNC) {
+                        lineToProcess[line].jelines = [];
+                        lineToProcess[line].jelines.push(countLine);
+                        lineToProcess[line].jelines.push(countLine + 1);
+                        countLine += 2;
+                    }
+                    countimpacts++;
+                }
+                log.audit({ title: 'flag', details: true });
+                //save the record.
+                var jvId = 0;
+                var jsvError = {
+                    errorname: '',
+                    errormsg: ''
+                };
+                try {
+                    if (countimpacts > 0) {
+                        jvId = journal.save();
+                    }
+
+                } catch (error) {
+                    jsvError.errorname = error.name;
+                    jsvError.errormsg = error.message;
+                    log.error('SAVE JE', error);
+                }
+
+                log.debug('jvId ', jvId);
+                for (var line in lineToProcess) {
+                    if (jvId) {
+                        lineToProcess[line].je = jvId;
+                    }
+                    else {
+                        lineToProcess[line].je = 0;
+                        lineToProcess[line].errorname = (!lineToProcess[line].errorname) ? jsvError.errorname : lineToProcess[line].errorname;
+                        lineToProcess[line].errormsg = (!lineToProcess[line].errorname) ? jsvError.errormsg : lineToProcess[line].errormsg;
+                    }
+                }
+
+                return lineToProcess;
+            } catch (error) {
+                log.debug('Error createJournalEntry: ', error);
+            }
+        }
         function CreateCustomerPayment(params, lineToProcess, accountConfigurations, jvId) {
-            log.debug('CreateCustomerPayment params', params);
-            log.debug('CreateCustomerPayment lineToProcess', lineToProcess);
-            log.debug('CreateCustomerPayment accountConfigurations', accountConfigurations);
-            log.debug('CreateCustomerPayment jvId', jvId);
-            log.debug('CreateCustomerPayment TYPE', lineToProcess[0][TRANSACTION_BODY.TYPE]);
+            log.debug({ title: 'CreateCustomerPayment params', details: params });
+            log.debug({ title: 'CreateCustomerPayment lineToProcess', details: lineToProcess });
+            log.debug({ title: 'CreateCustomerPayment accountConfigurations', details: accountConfigurations });
+            log.debug({ title: 'CreateCustomerPayment jvId', details: jvId });
+            log.debug({ title: 'CreateCustomerPayment TYPE', details: lineToProcess[0][TRANSACTION_BODY.TYPE] });
 
             var transType = params.transaction_type;
 
             if (lineToProcess[0][TRANSACTION_BODY.TYPE] == 7 || lineToProcess[0][TRANSACTION_BODY.TYPE] == "7") {
-
-                var customerPayment = record.create({
-                    type: record.Type.CUSTOMER_PAYMENT,
+        
+                var customerPayment = record.transform({
+                    fromType: record.Type.INVOICE,
+                    fromId: lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID],
+                    toType: record.Type.CUSTOMER_PAYMENT,
                     isDynamic: true
                 });
+        
+                // var customerPayment = record.create({
+                //     type: record.Type.CUSTOMER_PAYMENT,
+                //     isDynamic: true
+                // });
 
-                customerPayment.setValue({
-                    fieldId: TRANSACTION_BODY.CUSTOMER,
-                    value: lineToProcess[0][TRANSACTION_BODY.NAME]
-                });
+                // customerPayment.setValue({
+                //     fieldId: TRANSACTION_BODY.CUSTOMER,
+                //     value: lineToProcess[0][TRANSACTION_BODY.NAME],
+                //     ignoreFieldChange: false
+                // });
 
-                customerPayment.setValue({
-                    fieldId: TRANSACTION_BODY.SUBSIDIARY,
-                    value: params.subsidiary
-                });
+                // customerPayment.setValue({
+                //     fieldId: TRANSACTION_BODY.SUBSIDIARY,
+                //     value: params.subsidiary
+                // });
 
-                customerPayment.setValue({
-                    fieldId: TRANSACTION_BODY.CHANEL,
-                    value: accountConfigurations[ACCOUNT_COMBINATION.CHANEL]
-                });
+                // customerPayment.setValue({
+                //     fieldId: TRANSACTION_BODY.CHANEL,
+                //     value: accountConfigurations[ACCOUNT_COMBINATION.CHANEL]
+                // });
 
-                customerPayment.setValue({
-                    fieldId: TRANSACTION_BODY.LOCATION,
-                    value: accountConfigurations[ACCOUNT_COMBINATION.LOCATION]
-                });
+                // customerPayment.setValue({
+                //     fieldId: TRANSACTION_BODY.LOCATION,
+                //     value: accountConfigurations[ACCOUNT_COMBINATION.LOCATION]
+                // });
 
 
-                customerPayment.setValue({
-                    fieldId: TRANSACTION_BODY.DEPARTMENT,
-                    value: accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]
-                });
+                // customerPayment.setValue({
+                //     fieldId: TRANSACTION_BODY.DEPARTMENT,
+                //     value: accountConfigurations[ACCOUNT_COMBINATION.DEPARTMENT]
+                // });
 
-                customerPayment.setValue({
-                    fieldId: TRANSACTION_BODY.AR_ACCOUNT,
-                    value: lineToProcess[0][TRANSACTION_BODY.ACCOUNT]
-                });
+                // customerPayment.setValue({
+                //     fieldId: TRANSACTION_BODY.AR_ACCOUNT,
+                //     value: lineToProcess[0][TRANSACTION_BODY.ACCOUNT]
+                // });
 
 
                 var lineCount = customerPayment.getLineCount({
@@ -941,12 +937,14 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                         });
 
                         var isLinePresent = lineToProcess.filter(function (d) {
-                            return d[TRANSACTION_BODY.INTERNAL_ID] == transactionId && (d[TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1);
+                            // return d[TRANSACTION_BODY.INTERNAL_ID] == transactionId && (d[TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1);
+                            return d[TRANSACTION_BODY.INTERNAL_ID] == transactionId && (Number(d[TRANSACTION_BODY.AMOUNT_REMAINING])) == (Number(amountdebit));
                         });
 
-                        log.debug("Validation VEN: " + lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] + " == " + transactionId + " && (" + lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1 + ") == (" + amountdebit * 1 + ") ", lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] == transactionId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amount * 1));
+                        // log.debug("Validation VEN: " + lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] + " == " + transactionId + " && (" + lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1 + ") == (" + amountdebit * 1 + ") ", lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] == transactionId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amount * 1));
 
-                        if (lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] == transactionId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1)) {
+                        // if (lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] == transactionId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1)) {
+                        if (lineToProcess[0][TRANSACTION_BODY.INTERNAL_ID] == transactionId && (Number(lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING])) == (Number(amountdebit))) {
                             customerPayment.setCurrentSublistValue({
                                 sublistId: TRANSACTION_LINE.APPLY_ID,
                                 fieldId: TRANSACTION_LINE.APPLY,
@@ -958,10 +956,16 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                             });
                             invoicefound = true;
                             log.debug("Transaction applied debit", 'T');
+                            log.debug({
+                                title: 'Montos debito', details: {
+                                    amountdebit: customerPayment.getCurrentSublistValue({
+                                        sublistId: TRANSACTION_LINE.APPLY_ID,
+                                        fieldId: TRANSACTION_LINE.AMOUNT_DUE
+                                    })
+                                }
+                            });
                             break;
                         }
-
-
 
                         /*if (isLinePresent.length > 0) {
                             customerPayment.setCurrentSublistValue({
@@ -969,7 +973,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                                 fieldId: TRANSACTION_LINE.APPLY,
                                 value: true
                             });
-
+ 
                             customerPayment.commitLine({
                                 sublistId: TRANSACTION_LINE.APPLY_ID
                             });
@@ -982,7 +986,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                                     fieldId: TRANSACTION_LINE.APPLY,
                                     value: true
                                 });
-
+ 
                                 customerPayment.commitLine({
                                     sublistId: TRANSACTION_LINE.APPLY_ID
                                 });
@@ -997,7 +1001,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                     sublistId: TRANSACTION_LINE.CREDIT_ID
                 });
 
-                log.debug("first option count credit", lineCount);
+                // log.debug("first option count credit", lineCount);
                 //Search Journal Entry
                 if (creditLineCount > 0) {
                     for (var c = 0; c < creditLineCount; c++) {
@@ -1016,7 +1020,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                             fieldId: TRANSACTION_LINE.AMOUNT_DUE
                         });
 
-                        log.debug("validaciones credit: " + creditId + " == " + jvId + " && (" + lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1 + ") == (" + amount * 1 + ")", creditId == jvId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amount * 1));
+                        // log.debug("validaciones credit: " + creditId + " == " + jvId + " && (" + lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1 + ") == (" + amount * 1 + ")", creditId == jvId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amount * 1));
 
 
 
@@ -1031,6 +1035,15 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                                 sublistId: TRANSACTION_LINE.CREDIT_ID
                             });
                             jefound = true;
+                            log.debug({ title: 'jefound', details: jefound });
+                            log.debug({
+                                title: 'Montos debito', details: {
+                                    amountdebit:  customerPayment.getCurrentSublistValue({
+                                        sublistId: TRANSACTION_LINE.CREDIT_ID,
+                                        fieldId: TRANSACTION_LINE.AMOUNT_DUE
+                                    }) 
+                                }
+                            });
                             break;
                         }
                     }
@@ -1042,9 +1055,10 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                         enableSourcing: false,
                         ignoreMandatoryFields: true
                     });
+
                 }
 
-                log.debug("Customer Payment First", id);
+                // log.debug("Customer Payment First", id);
                 //save the record.
                 return id;
             }
@@ -1060,7 +1074,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                     sublistId: TRANSACTION_LINE.APPLY_ID
                 });
 
-                log.debug("second option count apply", lineCount);
+                // log.debug("second option count apply", lineCount);
 
                 var jefound = false;
                 if (lineCount > 0) {
@@ -1090,7 +1104,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                         });
 
 
-                        log.debug("Validation: " + transactionId + " == " + jvId + " && (" + lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1 + ") == (" + amountdebit * 1 + ")", transactionId == jvId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1));
+                        // log.debug("Validation: " + transactionId + " == " + jvId + " && (" + lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1 + ") == (" + amountdebit * 1 + ")", transactionId == jvId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1));
 
 
                         if (transactionId == jvId && (lineToProcess[0][TRANSACTION_BODY.AMOUNT_REMAINING] * 1) == (amountdebit * 1)) {
@@ -1118,7 +1132,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                     });
                 }
 
-                log.debug("Customer Payment First-2", id);
+                // log.debug("Customer Payment First-2", id);
                 //save the record.
                 return id;
             }
@@ -1182,7 +1196,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                     enableSourcing: false,
                     ignoreMandatoryFields: true
                 });
-                log.debug("Customer Payment Second", id);
+                // log.debug("Customer Payment Second", id);
                 return id;
             }
             else if (lineToProcess[0][TRANSACTION_BODY.TYPE] == 13 || lineToProcess[0][TRANSACTION_BODY.TYPE] == "13") {
@@ -1246,7 +1260,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                     enableSourcing: false,
                     ignoreMandatoryFields: true
                 });
-                log.debug("Customer Payment Third", id);
+                // log.debug("Customer Payment Third", id);
                 return id;
             }
             else if (lineToProcess[0][TRANSACTION_BODY.TYPE] == 15 || lineToProcess[0][TRANSACTION_BODY.TYPE] == "15") {
@@ -1305,14 +1319,14 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                     enableSourcing: false,
                     ignoreMandatoryFields: true
                 });
-                log.debug("Customer Payment Fourth", id);
+                // log.debug("Customer Payment Fourth", id);
                 return id;
             }
         }
 
         function GetConfigurations(subsidiaryId, isGNC) {
-            log.debug({ title: 'subsidiaryId', details: subsidiaryId });
-            log.debug({ title: 'isGNC', details: isGNC });
+            // log.debug({ title: 'subsidiaryId', details: subsidiaryId });
+            // log.debug({ title: 'isGNC', details: isGNC });
             var res = {};
             try {
                 if (isGNC) {
@@ -1333,7 +1347,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task', 'N/config', 'N/format', '
                             ]
                     });
                     var searchResultCount = searchObj.runPaged().count;
-                    log.debug({ title: 'searchResultCount:', details: searchResultCount });
+                    // log.debug({ title: 'searchResultCount:', details: searchResultCount });
                     if (searchResultCount > 0) {
                         searchObj.run().each(function (result) {
                             // .run().each has a limit of 4,000 results

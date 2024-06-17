@@ -9,12 +9,14 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
 
         var glbCurrentRecord;
         const CUSTOM_FIELDS = {};
-        CUSTOM_FIELDS.SELECT_CURRENT = 'custpage_select_current';
-        CUSTOM_FIELDS.PAGE = 'custpage_page';
-        CUSTOM_FIELDS.SELECT_ALL = 'custpage_select_all';
+        CUSTOM_FIELDS.SELECT_CURRENT = 'custpage_select_current'; // Campo exclusivo de Vinoteca
+        CUSTOM_FIELDS.PAGE = 'custpage_page'; // Campo exclusivo de Vinoteca
+        CUSTOM_FIELDS.SELECT_ALL = 'custpage_select_all'; // Campo exclusivo de Vinoteca
         CUSTOM_FIELDS.CUSTOMER = 'custpage_customer';
+        CUSTOM_FIELDS.CUSTOMER_CATEGORY = 'custpage_customer_category'; // Campo exclusivo de GNC
         CUSTOM_FIELDS.SUBSIDIARY = 'custpage_subsidiary';
         CUSTOM_FIELDS.TRAN_TYPE = 'custpage_transaction_type';
+        CUSTOM_FIELDS.TRAN_DATE = 'custpage_trandate';
         CUSTOM_FIELDS.START_DATE = 'custpage_startdate';
         CUSTOM_FIELDS.END_DATE = 'custpage_enddate';
         CUSTOM_FIELDS.START_AMT = 'custpage_start_amt';
@@ -22,7 +24,17 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
         CUSTOM_FIELDS.REASON = 'custpage_reason';
         CUSTOM_FIELDS.PRIMARY = 'custpage_primaryfilters';
         CUSTOM_FIELDS.SECONDARY = 'custpage_secondaryfilters';
-        CUSTOM_FIELDS.MESSAGE = 'custpage_message';
+        CUSTOM_FIELDS.IDS_PAGINATION = 'custpage_ids_pagination';
+        CUSTOM_FIELDS.FILE = 'custpage_file';
+        CUSTOM_FIELDS.PARAMS = 'custpage_params';
+        CUSTOM_FIELDS.TOTAL_TRANS = 'custpage_total_trans'; // Campo exclusivo de Vinoteca
+        CUSTOM_FIELDS.MESSAGE = 'custpage_message'; // Campo exclusivo de Vinoteca
+        CUSTOM_FIELDS.DEPARTMENT = 'custpage_department'; // Campo exclusivo de GNC
+        CUSTOM_FIELDS.CLASS = 'custpage_class'; // Campo exclusivo de GNC
+        CUSTOM_FIELDS.ID_TRAND = 'custpage_idtrand'
+        CUSTOM_FIELDS.CHECK_ALL = 'custpage_checkall'
+        CUSTOM_FIELDS.UNCHECK_ALL = 'custpage_uncheckall'
+        CUSTOM_FIELDS.EJECT = 'custpage_eject'
 
         const ACCOUNT_COMBINATION = {};
 
@@ -32,6 +44,9 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
 
         CUSTOM_FIELDS.LISTS = CUSTOM_LISTS;
 
+        let idItems = []
+        var quitar = false;
+        var countador = 0;
         /**
          * Function to be executed after page is initialized.
          *
@@ -42,7 +57,7 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
          * @since 2015.2
          */
         function pageInit(scriptContext) {
-            // var mensajeInfo = message.create({ type: message.Type.WARNING, title: "EN MANTENIMIENTO", message: "Se esta optimizando el codigo." });
+            // var mensajeInfo = message.create({ type: message.Type.WARNING, title: "EN MANTENIMIENTO", message: "Corriendo busqueda en apartado de PAGOS." });
             // mensajeInfo.show({ duration: 4000 });
             glbCurrentRecord = currentRecord.get();
             console.log("inicio");
@@ -81,7 +96,12 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
                 ACCOUNT_COMBINATION.CLASS = 'custrecord_cb_conf_additional';
                 ACCOUNT_COMBINATION.SUBSIDIARY = 'custrecord_cb_conf_subsidiary';
             }
-
+            var objField = glbCurrentRecord.getValue({
+                fieldId: CUSTOM_FIELDS.ID_TRAND
+            });
+            console.log({ title: 'objField', details: objField });
+            idItems = objField.split(',');
+            idItems = idItems.filter(item => item !== '');
         }
 
         /**
@@ -98,21 +118,89 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
          */
         function fieldChanged(scriptContext) {
             try {
+                console.log({ title: 'scriptContext', details: scriptContext });
+                // var isGNC = runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_is_gnc' });
                 let currentForm = currentRecord.get();
+                var parametros = ((currentForm.getValue({ fieldId: "custpage_params" }) || '').length > 0 ? JSON.parse(currentForm.getValue({ fieldId: "custpage_params" })) :{});
                 if (scriptContext.fieldId === 'custpage_pagination') {
-                    var parametros = JSON.parse(currentForm.getValue({ fieldId: "custpage_params" }));
                     var paginacion = currentForm.getValue({ fieldId: "custpage_pagination" });
+                    var checkAll = glbCurrentRecord.getValue({ fieldId: 'custpage_checkall' });
+                    var uncheckAll = glbCurrentRecord.getValue({ fieldId: 'custpage_uncheckall' });
+                    var ids = glbCurrentRecord.getValue({ fieldId: 'custpage_idtrand' });
+                    var eject = glbCurrentRecord.getValue({ fieldId: 'custpage_eject' });
                     parametros.custpage_pagination = paginacion
+                    parametros.custpage_checkall = (checkAll ? 'T' : 'F')
+                    parametros.custpage_uncheckall = (uncheckAll ? 'T' : 'F')
+                    parametros.custpage_idtrand = ids
+                    parametros.custpage_eject = eject
                     var direccion = url.resolveScript({
                         deploymentId: "customdeploy_tkio_cs_cancel_amount_sl",
                         scriptId: "customscript_tkio_cs_cancel_amount_sl",
                         params: {
                             params: JSON.stringify(parametros)
-                         },
+                        },
                         returnExternalUrl: false
                     });
-                    window.open(direccion, '_self')                
+                    window.open(direccion, '_self')
                 }
+                var lineasTotales = currentForm.getLineCount({ sublistId: 'custpage_transactions' });
+
+                if ((currentForm.getValue({ fieldId: "custpage_params" })).length > 0 && (scriptContext.fieldId === CUSTOM_FIELDS.CUSTOMER || scriptContext.fieldId === CUSTOM_FIELDS.SUBSIDIARY ||
+                    scriptContext.fieldId === CUSTOM_FIELDS.SUBSIDIARY || scriptContext.fieldId === CUSTOM_FIELDS.TRAN_TYPE ||
+                    scriptContext.fieldId === CUSTOM_FIELDS.TRAN_DATE || scriptContext.fieldId === CUSTOM_FIELDS.START_DATE ||
+                    scriptContext.fieldId === CUSTOM_FIELDS.END_DATE || scriptContext.fieldId === CUSTOM_FIELDS.START_AMT ||
+                    scriptContext.fieldId === CUSTOM_FIELDS.END_AMT || scriptContext.fieldId === CUSTOM_FIELDS.REASON ||
+                    scriptContext.fieldId === CUSTOM_FIELDS.FILE)) {
+                    glbCurrentRecord.setValue({ fieldId: 'custpage_eject', value: false });
+                    dialog.confirm({
+                        title: 'Filtros cambiados',
+                        message: 'Si desea cambiar los filtros haga click en continuar'
+                    }).then(function (result) {
+                        if (result) {
+                            reload();
+                        } else {
+                            var paginacion = currentForm.getValue({ fieldId: "custpage_pagination" });
+                            var checkAll = glbCurrentRecord.getValue({ fieldId: 'custpage_checkall' });
+                            var uncheckAll = glbCurrentRecord.getValue({ fieldId: 'custpage_uncheckall' });
+                            var ids = glbCurrentRecord.getValue({ fieldId: 'custpage_idtrand' });
+                            var eject = glbCurrentRecord.getValue({ fieldId: 'custpage_eject' });
+                            parametros.custpage_pagination = paginacion
+                            parametros.custpage_checkall = (checkAll ? 'T' : 'F')
+                            parametros.custpage_uncheckall = (uncheckAll ? 'T' : 'F')
+                            parametros.custpage_idtrand = ids
+                            parametros.custpage_eject = eject
+                            var direccion = url.resolveScript({
+                                deploymentId: "customdeploy_tkio_cs_cancel_amount_sl",
+                                scriptId: "customscript_tkio_cs_cancel_amount_sl",
+                                params: {
+                                    params: JSON.stringify(parametros)
+                                },
+                                returnExternalUrl: false
+                            });
+                            window.open(direccion, '_self')
+                        }
+                    })
+
+                }
+                if (scriptContext.fieldId === 'custpage_list_select') {
+                    var idCheck = currentForm.getSublistValue({ sublistId: 'custpage_transactions', fieldId: 'custpage_list_select', line: scriptContext.line });
+                    let idItem = currentForm.getSublistValue({ sublistId: 'custpage_transactions', fieldId: 'custpage_list_internalid', line: scriptContext.line });
+
+                    var valorCA = glbCurrentRecord.getValue({ fieldId: 'custpage_checkall' });
+                    var valorUA = glbCurrentRecord.getValue({ fieldId: 'custpage_uncheckall' });
+                    if (!idCheck && valorCA) {
+                        idItems.push(idItem);
+                    } else if (idCheck && valorUA) {
+                        idItems.push(idItem);
+                    } else {
+                        idItems = idItems.filter(item => item !== idItem);
+                    }
+                    console.log({ title: 'idItems', details: idItems.join(',') });
+                    glbCurrentRecord.setValue({ fieldId: 'custpage_idtrand', value: idItems.join(',') });
+                    // glbCurrentRecord.setValue({ fieldId: 'custpage_checkall', value: false });
+                    // glbCurrentRecord.setValue({ fieldId: 'custpage_uncheckall', value: false });
+                }
+
             } catch (e) {
                 console.log({ title: 'Error fieldChange:', details: e });
             }
@@ -482,22 +570,52 @@ define(['N/ui/dialog', 'N/format', 'N/search', 'N/currentRecord', 'N/ui/message'
         }
 
         function checkAll() {
-            glbCurrentRecord = currentRecord.get();
-            var lineCount = glbCurrentRecord.getLineCount({
-                sublistId: CUSTOM_FIELDS.LISTS.LIST_ID
-            });
-            for (var index = 0; index < lineCount; index++) {
-                setSublistValue(CUSTOM_FIELDS.LISTS.LIST_ID, CUSTOM_FIELDS.LISTS.SELECT, index, true);
+            try {
+                glbCurrentRecord = currentRecord.get();
+                var lineCount = glbCurrentRecord.getLineCount({
+                    sublistId: CUSTOM_FIELDS.LISTS.LIST_ID
+                });
+                for (var index = 0; index < lineCount; index++) {
+                    setSublistValue(CUSTOM_FIELDS.LISTS.LIST_ID, CUSTOM_FIELDS.LISTS.SELECT, index, true);
+                }
+                var valor = glbCurrentRecord.getValue({ fieldId: 'custpage_checkall' });
+                glbCurrentRecord.setValue({ fieldId: 'custpage_checkall', value: !valor });
+                glbCurrentRecord.setValue({ fieldId: 'custpage_uncheckall', value: false });
+                glbCurrentRecord.setValue({ fieldId: 'custpage_idtrand', value: '' });
+                //Validacion para cuando se pulse dos veces
+                var valorCA = glbCurrentRecord.getValue({ fieldId: 'custpage_checkall' });
+                var valorUA = glbCurrentRecord.getValue({ fieldId: 'custpage_uncheckall' });
+                if (!valorCA && !valorUA) {
+                    glbCurrentRecord.setValue({ fieldId: 'custpage_checkall', value: true });
+                }
+                idItems = []
+            } catch (e) {
+                console.log({ title: 'Error checkAll:', details: e });
             }
         }
 
         function uncheckAll() {
-            glbCurrentRecord = currentRecord.get();
-            var lineCount = glbCurrentRecord.getLineCount({
-                sublistId: CUSTOM_FIELDS.LISTS.LIST_ID
-            });
-            for (var index = 0; index < lineCount; index++) {
-                setSublistValue(CUSTOM_FIELDS.LISTS.LIST_ID, CUSTOM_FIELDS.LISTS.SELECT, index, false);
+            try {
+                glbCurrentRecord = currentRecord.get();
+                var lineCount = glbCurrentRecord.getLineCount({
+                    sublistId: CUSTOM_FIELDS.LISTS.LIST_ID
+                });
+                for (var index = 0; index < lineCount; index++) {
+                    setSublistValue(CUSTOM_FIELDS.LISTS.LIST_ID, CUSTOM_FIELDS.LISTS.SELECT, index, false);
+                }
+                var valor = glbCurrentRecord.getValue({ fieldId: 'custpage_uncheckall' });
+                glbCurrentRecord.setValue({ fieldId: 'custpage_uncheckall', value: !valor });
+                glbCurrentRecord.setValue({ fieldId: 'custpage_checkall', value: false });
+                glbCurrentRecord.setValue({ fieldId: 'custpage_idtrand', value: '' });
+                //Validacion para cuando se pulse dos veces
+                var valorCA = glbCurrentRecord.getValue({ fieldId: 'custpage_checkall' });
+                var valorUA = glbCurrentRecord.getValue({ fieldId: 'custpage_uncheckall' });
+                if (!valorCA && !valorUA) {
+                    glbCurrentRecord.setValue({ fieldId: 'custpage_uncheckall', value: true });
+                }
+                idItems = []
+            } catch (e) {
+                console.log({ title: 'Error uncheckAll:', details: e });
             }
         }
         function setSublistValue(sublistId, fieldId, line, value) {

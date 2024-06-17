@@ -34,6 +34,10 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
         CUSTOM_FIELDS.MESSAGE = 'custpage_message'; // Campo exclusivo de Vinoteca
         CUSTOM_FIELDS.DEPARTMENT = 'custpage_department'; // Campo exclusivo de GNC
         CUSTOM_FIELDS.CLASS = 'custpage_class'; // Campo exclusivo de GNC
+        CUSTOM_FIELDS.ID_TRAND = 'custpage_idtrand'
+        CUSTOM_FIELDS.CHECK_ALL = 'custpage_checkall'
+        CUSTOM_FIELDS.UNCHECK_ALL = 'custpage_uncheckall'
+        CUSTOM_FIELDS.EJECT = 'custpage_eject'
 
         const CUSTOM_LISTS = {};
         CUSTOM_LISTS.LIST_ID = 'custpage_transactions';
@@ -76,6 +80,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
 
         const TRANSACTION_BODY = {};
         TRANSACTION_BODY.TYPE = 'type';
+        TRANSACTION_BODY.TYPE_AJUST = 'custbodytipo_pago';
         TRANSACTION_BODY.TYPE_ENTITY = 'typeentity'; // Campo exclusivo de Vinoteca
         TRANSACTION_BODY.INTERNAL_ID = 'internalid';
         TRANSACTION_BODY.MAINLINE = 'mainline';
@@ -104,6 +109,12 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
         SCRIPTS.SCHEDULED_SCRIPT = {};
         SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID = 'customscript_tkio_cs_cancel_amount_me'; //'customscript_ss_closinh_balances';
         SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID = 'customdeploy_tkio_cancel_amount_mr'; //'customdeploy_ss_closinh_balances';
+        SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID1 = 'customdeploy_tkio_cancel_amount_mr1'; //'customdeploy_ss_closinh_balances';
+        SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID2 = 'customdeploy_tkio_cancel_amount_mr2'; //'customdeploy_ss_closinh_balances';
+        SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID3 = 'customdeploy_tkio_cancel_amount_mr3'; //'customdeploy_ss_closinh_balances';
+        SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID4 = 'customdeploy_tkio_cancel_amount_mr4'; //'customdeploy_ss_closinh_balances';
+        SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID5 = 'customdeploy_tkio_cancel_amount_mr5'; //'customdeploy_ss_closinh_balances';
+        SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID6 = 'customdeploy_tkio_cancel_amount_mr6'; //'customdeploy_ss_closinh_balances';
 
         const BALCANCE_CANCELLATION = {};
         BALCANCE_CANCELLATION.RECORD_ID = 'customrecord_efx_cs_tracing_can';
@@ -125,9 +136,11 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
         function onRequest(context) {
             try {
                 var serverRequestAux = context.request;
+                var methodOriginal = serverRequestAux;
                 var serverResponse = context.response;
                 if (!serverRequestAux.parameters.params) {
                     var serverRequest = context.request
+                    var eje = true
                 } else {
                     var serverRequest = new Object();
                     serverRequest.method = 'POST';
@@ -173,6 +186,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
 
                 form = createPanel(isGNC, form, serverRequest, status);
                 //serverRequest.parameters = JSON.parse(serverRequest.parameters.params)
+                log.audit({ title: 'serverRequest.parameters.params', details: serverRequest.parameters.params });
                 form = addDataRequest(form, serverRequest.parameters.params);
                 var subList = AddSublist(form, isGNC);
                 log.debug({ title: 'form', details: form.title });
@@ -204,7 +218,12 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             'start_amt': params[CUSTOM_FIELDS.START_AMT],
                             'end_amt': params[CUSTOM_FIELDS.END_AMT],
                             'reason': params[CUSTOM_FIELDS.REASON],
-                            'file': params[CUSTOM_FIELDS.FILE]
+                            'file': params[CUSTOM_FIELDS.FILE],
+                            'custpage_idtrand': params[CUSTOM_FIELDS.ID_TRAND],
+                            'custpage_idtrand_total': params[CUSTOM_FIELDS.ID_TRAND_TOTAL],
+                            'custpage_checkall': params[CUSTOM_FIELDS.CHECK_ALL],
+                            'custpage_uncheckall': params[CUSTOM_FIELDS.UNCHECK_ALL],
+                            'custpage_eject': params[CUSTOM_FIELDS.EJECT]
                         }
                         let paramsAuxField = {
                             'custpage_customer': params[CUSTOM_FIELDS.CUSTOMER],
@@ -218,13 +237,17 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             'custpage_end_amt': params[CUSTOM_FIELDS.END_AMT],
                             'custpage_reason': params[CUSTOM_FIELDS.REASON],
                             'custpage_file': params[CUSTOM_FIELDS.FILE],
-                            'custpage_pagination': ''
+                            'custpage_pagination': '',
+                            'custpage_idtrand': params[CUSTOM_FIELDS.ID_TRAND],
+                            'custpage_checkall': params[CUSTOM_FIELDS.CHECK_ALL],
+                            'custpage_uncheckall': params[CUSTOM_FIELDS.UNCHECK_ALL],
+                            'custpage_eject': params[CUSTOM_FIELDS.EJECT]
                         }
                         searchParams = searchParamsAux;
                         paramsField = paramsAuxField
                         log.debug('searchParams', searchParams);
                         log.debug({ title: 'form', details: form.title });
-                        form = setValueSelect(form, searchParams);
+                        form = setValueSelect(form, searchParams, eje, isGNC);
                         flagCondition = true;
                     } else if (isGNC && serverRequest.method !== 'POST') {
                         flagCondition = false;
@@ -234,13 +257,18 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             transType = (transType) ? JSON.parse(transType) : [];
                             customer = (params[CUSTOM_FIELDS.CUSTOMER]) ? JSON.parse(params[CUSTOM_FIELDS.CUSTOMER]) : ''
                         }
+                        log.audit({title: 'params', details: params});
                         let searchParamsAux = {
                             'customer': customer,
                             'subsidiary': params[CUSTOM_FIELDS.SUBSIDIARY],
                             'transaction_type': transType,
                             'startdate': params[CUSTOM_FIELDS.START_DATE],
                             'enddate': params[CUSTOM_FIELDS.END_DATE],
-                            'end_amt': params[CUSTOM_FIELDS.END_AMT]
+                            'end_amt': params[CUSTOM_FIELDS.END_AMT],
+                            'custpage_idtrand': params[CUSTOM_FIELDS.ID_TRAND]||'',
+                            'custpage_checkall': params[CUSTOM_FIELDS.CHECK_ALL]||'T',
+                            'custpage_uncheckall': params[CUSTOM_FIELDS.UNCHECK_ALL]||'F',
+                            'custpage_eject': params[CUSTOM_FIELDS.EJECT]
                         };
                         let paramsAuxField = {
                             'custpage_customer': customer,
@@ -249,28 +277,48 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             'custpage_trandate': params[CUSTOM_FIELDS.START_DATE],
                             'custpage_enddate': params[CUSTOM_FIELDS.END_DATE],
                             'custpage_end_amt': params[CUSTOM_FIELDS.END_AMT],
-                            'custpage_pagination': ''
+                            'custpage_pagination': '',
+                            'custpage_idtrand': params[CUSTOM_FIELDS.ID_TRAND]||'',
+                            'custpage_checkall': params[CUSTOM_FIELDS.CHECK_ALL]||'T',
+                            'custpage_uncheckall': params[CUSTOM_FIELDS.UNCHECK_ALL]||'F',
+                            'custpage_eject': params[CUSTOM_FIELDS.EJECT]
                         };
                         searchParams = searchParamsAux;
                         paramsField = paramsAuxField;
                         log.debug('searchParams Not GNC', searchParams);
+                        form = setValueSelect(form, searchParams, eje, isGNC);
                         flagCondition = true;
                     }
 
                     if (flagCondition) {
                         // get line count
                         var lineCount;
+                        // log.audit({
+                        //     title: 'methodOriginal', details: methodOriginal.getLineCount({
+                        //         group: CUSTOM_FIELDS.LISTS.LIST_ID
+                        //     })
+                        // });
                         try {
-                            lineCount = serverRequest.getLineCount({
-                                group: CUSTOM_FIELDS.LISTS.LIST_ID
-                            })
+                            if (params.custpage_eject === 'T') {
+                                lineCount = serverRequest.getLineCount({
+                                    group: CUSTOM_FIELDS.LISTS.LIST_ID
+                                });
+                            }
+                            else {
+                                lineCount = 'F'
+                            }
                         } catch (e) {
-                            log.error({ title: 'Error :', details: e });
+                            log.audit({ title: 'Linecount establecido en -1 :', details: e });
                             lineCount = -1
                         }
+                        var validEject = form.getField({
+                            id: CUSTOM_FIELDS.EJECT
+                        })
+                        log.audit({ title: 'validEject', details: validEject.defaultValue });
                         log.debug({ title: 'lineCount', details: lineCount });
-
-                        if (lineCount > 0 && searchParams.file !== 'T') {
+                        var tranResults = GetTransactions(searchParams, isGNC);
+                        log.debug({ title: 'tranResults ' + tranResults.length, details: tranResults });
+                        if (lineCount > 0 && tranResults.length > 0 && validEject && searchParams.file !== 'T') {
                             // process to create a journal entry
                             var lines = [];
                             var csv = '';
@@ -280,227 +328,366 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                                 csv = 'ID interno, Fecha, No. Transaccion, Tipo, Subsidiaria, Cliente, Cuenta, Metodo de pago, Monto, Monto adeudado \r\n';
                             }
 
-                            for (var line = 0; line < lineCount; line++) {
-                                var isSelected = serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.SELECT,
-                                    line: line
-                                }) === 'T';
 
-                                if (isSelected) {
-                                    var lineItems = {};
-                                    lineItems[TRANSACTION_BODY.INTERNAL_ID] = serverRequest.getSublistValue({
-                                        group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                        name: CUSTOM_FIELDS.LISTS.INTERNAL_ID,
-                                        line: line
-                                    });
+                            // for (var line = 0; line < lineCount; line++) {
+                            //     var isSelected = serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.SELECT,
+                            //         line: line
+                            //     }) === 'T';
 
-                                    // log.debug({
-                                    //     title: 'lineItems[TRANSACTION_BODY.INTERNAL_ID]',
-                                    //     details: lineItems[TRANSACTION_BODY.INTERNAL_ID]
-                                    // });
+                            //     if (isSelected) {
+                            //         var lineItems = {};
+                            //         lineItems[TRANSACTION_BODY.INTERNAL_ID] = serverRequest.getSublistValue({
+                            //             group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //             name: CUSTOM_FIELDS.LISTS.INTERNAL_ID,
+                            //             line: line
+                            //         });
 
-                                    var name = serverRequest.getSublistValue({
-                                        group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                        name: CUSTOM_FIELDS.LISTS.TRANS_TYPE,
-                                        line: line
-                                    });
-                                    var type = 0;
-                                    var typeentity = 0;
-                                    if (name === 'Factura de venta') {
-                                        type = 7;
-                                        typeentity = 1;
-                                    } else if (name === 'Pago de cliente') {
-                                        type = 9;
-                                        typeentity = 1;
-                                    } else if (name === 'Nota de crédito cliente') {
-                                        type = 11;
-                                        typeentity = 1;
-                                    } else if (name === 'Factura de proveedor') {
-                                        type = 13;
-                                        typeentity = 2;
-                                    } else if (name === 'Nota de crédito proveedor') {
-                                        type = 15;
-                                        typeentity = 2;
+                            //         // log.debug({
+                            //         //     title: 'lineItems[TRANSACTION_BODY.INTERNAL_ID]',
+                            //         //     details: lineItems[TRANSACTION_BODY.INTERNAL_ID]
+                            //         // });
+
+                            //         var name = serverRequest.getSublistValue({
+                            //             group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //             name: CUSTOM_FIELDS.LISTS.TRANS_TYPE,
+                            //             line: line
+                            //         });
+                            //         var type = 0;
+                            //         var typeentity = 0;
+                            //         if (name === 'Factura de venta') {
+                            //             type = 7;
+                            //             typeentity = 1;
+                            //         } else if (name === 'Pago de cliente') {
+                            //             type = 9;
+                            //             typeentity = 1;
+                            //         } else if (name === 'Nota de crédito cliente') {
+                            //             type = 11;
+                            //             typeentity = 1;
+                            //         } else if (name === 'Factura de proveedor') {
+                            //             type = 13;
+                            //             typeentity = 2;
+                            //         } else if (name === 'Nota de crédito proveedor') {
+                            //             type = 15;
+                            //             typeentity = 2;
+                            //         }
+
+
+
+                            //         lineItems[TRANSACTION_BODY.TYPE] = type;
+                            //         lineItems[TRANSACTION_BODY.TYPE_ENTITY] = typeentity;
+
+                            //         lineItems[TRANSACTION_BODY.NAME] = serverRequest.getSublistValue({
+                            //             group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //             name: CUSTOM_FIELDS.LISTS.NAME,
+                            //             line: line
+                            //         });
+
+                            //         lineItems[TRANSACTION_BODY.ACCOUNT] = serverRequest.getSublistValue({
+                            //             group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //             name: CUSTOM_FIELDS.LISTS.ACCOUNT,
+                            //             line: line
+                            //         });
+                            //         // log.debug({
+                            //         //     title: 'lineItems[TRANSACTION_BODY.ACCOUNT]',
+                            //         //     details: lineItems[TRANSACTION_BODY.ACCOUNT]
+                            //         // });
+
+                            //         lineItems[TRANSACTION_BODY.AMOUNT_REMAINING] = serverRequest.getSublistValue({
+                            //             group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //             name: CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING,
+                            //             line: line
+                            //         });
+                            //         if (isGNC) {
+                            //             // log.audit({ title: 'TRANSACTION_BODY.PAYMENT_METHOD', details: TRANSACTION_BODY.PAYMENT_METHOD });
+                            //             lineItems[TRANSACTION_BODY.PAYMENT_METHOD] = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.PAYMENT_METHOD,
+                            //                 line: line
+                            //             });
+                            //             lineItems[TRANSACTION_BODY.DEPARTMENT] = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.DEPARTMENT,
+                            //                 line: line
+                            //             });
+
+                            //             lineItems[TRANSACTION_BODY.CLASS] = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.CLASS,
+                            //                 line: line
+                            //             });
+                            //             lineItems[TRANSACTION_BODY.INTERCOMPANY] = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.INTERCOMPANY,
+                            //                 line: line
+                            //             });
+                            //             lineItems[TRANSACTION_BODY.SUBSIDIARY] = params[CUSTOM_FIELDS.SUBSIDIARY]
+                            //         }
+                            //         else {
+                            //             lineItems[TRANSACTION_BODY.TRAN_ID] = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.NUMBER,
+                            //                 line: line
+                            //             });
+
+                            //             var inactive = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.IS_INACTIVE,
+                            //                 line: line
+                            //             });
+                            //             lineItems[TRANSACTION_BODY.IS_INACTIVE] = (inactive == 'No' || inactive == 'NO') ? false : true;
+                            //             lineItems[TRANSACTION_BODY.SUBSIDIARY] = serverRequest.getSublistValue({
+                            //                 group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //                 name: CUSTOM_FIELDS.LISTS.SUBSIDIARY_ID,
+                            //                 line: line
+                            //             });
+                            //         }
+
+                            //         lines.push(lineItems);
+                            //     }
+                            //     // log.debug({ title: 'lines', details: lines });
+                            //     csv += serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.INTERNAL_ID,
+                            //         line: line
+                            //     });
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.DATE,
+                            //         line: line
+                            //     });
+
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.NUMBER,
+                            //         line: line
+                            //     });
+
+                            //     var trantype = serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.TRANS_TYPE,
+                            //         line: line
+                            //     });
+
+                            //     csv += ',' + trantype;
+
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: 'inpt_custpage_subsidiary', //CUSTOM_FIELDS.LISTS.SUBSIDIARY,
+                            //         line: line
+                            //     });
+
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.NAME,
+                            //         line: line
+                            //     }).toString().replace(/,/gi, ';');
+
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.ACCOUNT,
+                            //         line: line
+                            //     });
+                            //     if (isGNC) {
+                            //         csv += ',' + serverRequest.getSublistValue({
+                            //             group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //             name: CUSTOM_FIELDS.LISTS.PAYMENT_METHOD,
+                            //             line: line
+                            //         });
+                            //     }
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.AMOUNT,
+                            //         line: line
+                            //     });
+
+                            //     csv += ',' + serverRequest.getSublistValue({
+                            //         group: CUSTOM_FIELDS.LISTS.LIST_ID,
+                            //         name: CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING,
+                            //         line: line
+                            //     });
+                            //     csv += '\r\n';
+
+                            // }
+
+                            //Parametros de validacion de CHECKALL o UNCHECKALL
+                            let marcaTodo = serverRequest.parameters.custpage_checkall || 'T';
+                            let desMarcaTodo = serverRequest.parameters.custpage_uncheckall;
+                            var idsTransaccionesField = form.getField({
+                                id: CUSTOM_FIELDS.ID_TRAND
+                            })
+                            log.audit({ title: 'idsTransaccionesField', details: idsTransaccionesField.defaultValue });
+                            //IDS de las lineas seleccionadas
+                            let arrIdItems = (idsTransaccionesField.defaultValue).split(',');
+                            arrIdItems = arrIdItems.filter(item => item !== '');
+                            // log.audit({ title: 'tranResults', details: tranResults });
+                            let lines2 = generateLinesEject(tranResults, arrIdItems, marcaTodo, desMarcaTodo, isGNC, params);
+                            //Send filters as object using a parameter
+                            log.audit({ title: 'Numero de transacciones a ejecutar', details: lines2.length });
+                            log.audit({ title: 'Transacciones a ejecutar', details: lines2 });
+
+                            // log.debug({ title: 'objparam1', details: objparam1 });
+                            // log.debug({ title: 'objparam2', details: objparam2 });
+                            if (searchParams.file !== 'T' && lines2.length > 1000) {
+
+                                var arregloDeArreglos = bloques(lines2, Math.ceil(lines2.length / 7));
+
+                                log.audit({ title: 'Datos MapReduce 1', details: arregloDeArreglos[0] });
+                                log.audit({ title: 'Datos MapReduce 2', details: arregloDeArreglos[1] });
+                                log.audit({ title: 'Datos MapReduce 3', details: arregloDeArreglos[2] });
+                                log.audit({ title: 'Datos MapReduce 4', details: arregloDeArreglos[3] });
+                                log.audit({ title: 'Datos MapReduce 5', details: arregloDeArreglos[4] });
+                                log.audit({ title: 'Datos MapReduce 6', details: arregloDeArreglos[5] });
+                                log.audit({ title: 'Datos MapReduce 7', details: arregloDeArreglos[6] });
+                                var objparam1 = JSON.stringify(arregloDeArreglos[0]);
+                                var objparam2 = JSON.stringify(searchParams);
+                                //Create task to call scheduled script 1
+                                var shTask = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID,
+                                    params: {
+                                        "custscript_ss_lines": objparam1, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
                                     }
-
-
-
-                                    lineItems[TRANSACTION_BODY.TYPE] = type;
-                                    lineItems[TRANSACTION_BODY.TYPE_ENTITY] = typeentity;
-
-                                    lineItems[TRANSACTION_BODY.NAME] = serverRequest.getSublistValue({
-                                        group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                        name: CUSTOM_FIELDS.LISTS.NAME,
-                                        line: line
-                                    });
-
-                                    lineItems[TRANSACTION_BODY.ACCOUNT] = serverRequest.getSublistValue({
-                                        group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                        name: CUSTOM_FIELDS.LISTS.ACCOUNT,
-                                        line: line
-                                    });
-                                    // log.debug({
-                                    //     title: 'lineItems[TRANSACTION_BODY.ACCOUNT]',
-                                    //     details: lineItems[TRANSACTION_BODY.ACCOUNT]
-                                    // });
-
-                                    lineItems[TRANSACTION_BODY.AMOUNT_REMAINING] = serverRequest.getSublistValue({
-                                        group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                        name: CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING,
-                                        line: line
-                                    });
-                                    if (isGNC) {
-                                        // log.audit({ title: 'TRANSACTION_BODY.PAYMENT_METHOD', details: TRANSACTION_BODY.PAYMENT_METHOD });
-                                        lineItems[TRANSACTION_BODY.PAYMENT_METHOD] = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.PAYMENT_METHOD,
-                                            line: line
-                                        });
-                                        lineItems[TRANSACTION_BODY.DEPARTMENT] = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.DEPARTMENT,
-                                            line: line
-                                        });
-
-                                        lineItems[TRANSACTION_BODY.CLASS] = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.CLASS,
-                                            line: line
-                                        });
-                                        lineItems[TRANSACTION_BODY.INTERCOMPANY] = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.INTERCOMPANY,
-                                            line: line
-                                        });
-                                        lineItems[TRANSACTION_BODY.SUBSIDIARY] = params[CUSTOM_FIELDS.SUBSIDIARY]
+                                });
+                                var objparam11 = JSON.stringify(arregloDeArreglos[1]);
+                                //Create task to call scheduled script 2
+                                var shTask1 = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID1,
+                                    params: {
+                                        "custscript_ss_lines": objparam11, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
                                     }
-                                    else {
-                                        lineItems[TRANSACTION_BODY.TRAN_ID] = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.NUMBER,
-                                            line: line
-                                        });
-
-                                        var inactive = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.IS_INACTIVE,
-                                            line: line
-                                        });
-                                        lineItems[TRANSACTION_BODY.IS_INACTIVE] = (inactive == 'No' || inactive == 'NO') ? false : true;
-                                        lineItems[TRANSACTION_BODY.SUBSIDIARY] = serverRequest.getSublistValue({
-                                            group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                            name: CUSTOM_FIELDS.LISTS.SUBSIDIARY_ID,
-                                            line: line
-                                        });
+                                });
+                                var objparam12 = JSON.stringify(arregloDeArreglos[2]);
+                                //Create task to call scheduled script 3
+                                var shTask2 = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID2,
+                                    params: {
+                                        "custscript_ss_lines": objparam12, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
                                     }
-
-                                    lines.push(lineItems);
-                                }
-                                // log.debug({ title: 'lines', details: lines });
-                                csv += serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.INTERNAL_ID,
-                                    line: line
                                 });
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.DATE,
-                                    line: line
-                                });
-
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.NUMBER,
-                                    line: line
+                                var objparam13 = JSON.stringify(arregloDeArreglos[3]);
+                                //Create task to call scheduled script 4
+                                var shTask3 = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID3,
+                                    params: {
+                                        "custscript_ss_lines": objparam13, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
+                                    }
                                 });
 
-                                var trantype = serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.TRANS_TYPE,
-                                    line: line
+                                var objparam14 = JSON.stringify(arregloDeArreglos[4]);
+                                //Create task to call scheduled script 5
+                                var shTask4 = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID4,
+                                    params: {
+                                        "custscript_ss_lines": objparam14, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
+                                    }
                                 });
 
-                                csv += ',' + trantype;
-
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: 'inpt_custpage_subsidiary', //CUSTOM_FIELDS.LISTS.SUBSIDIARY,
-                                    line: line
+                                var objparam15 = JSON.stringify(arregloDeArreglos[5]);
+                                //Create task to call scheduled script 6
+                                var shTask5 = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID5,
+                                    params: {
+                                        "custscript_ss_lines": objparam15, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
+                                    }
                                 });
-
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.NAME,
-                                    line: line
-                                }).toString().replace(/,/gi, ';');
-
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.ACCOUNT,
-                                    line: line
+                                var objparam16 = JSON.stringify(arregloDeArreglos[6]);
+                                //Create task to call scheduled script 6
+                                var shTask6 = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID6,
+                                    params: {
+                                        "custscript_ss_lines": objparam16, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
+                                    }
                                 });
                                 if (isGNC) {
-                                    csv += ',' + serverRequest.getSublistValue({
-                                        group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                        name: CUSTOM_FIELDS.LISTS.PAYMENT_METHOD,
-                                        line: line
+                                    shTask.submit();
+                                    shTask1.submit();
+                                    shTask2.submit();
+                                    shTask3.submit();
+                                    shTask4.submit();
+                                    shTask5.submit();
+                                    shTask6.submit();
+                                    redirect.toTaskLink({
+                                        id: 'LIST_MAPREDUCESCRIPTSTATUS'
+                                    });
+                                } else {
+                                    var idtask = shTask.submit();
+                                    var idtask1 = shTask1.submit();
+                                    var idtask2 = shTask2.submit();
+                                    var idtask3 = shTask3.submit();
+                                    var idtask4 = shTask4.submit();
+                                    var idtask5 = shTask5.submit();
+                                    var idtask6 = shTask6.submit();
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask } });
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask1 } });
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask2 } });
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask3 } });
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask4 } });
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask5 } });
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask6 } });
+                                    redirect.toSuitelet({
+                                        scriptId: 'customscript_tkio_cs_cancel_amount_sl',
+                                        deploymentId: 'customdeploy_tkio_cs_cancel_amount_sl'
                                     });
                                 }
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.AMOUNT,
-                                    line: line
-                                });
-
-                                csv += ',' + serverRequest.getSublistValue({
-                                    group: CUSTOM_FIELDS.LISTS.LIST_ID,
-                                    name: CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING,
-                                    line: line
-                                });
-                                csv += '\r\n';
 
                             }
+                            if (searchParams.file !== 'T' && lines2.length <= 1000) {
+                                var objparam1 = JSON.stringify(lines2);
+                                var objparam2 = JSON.stringify(searchParams);
 
-                            //Send filters as object using a parameter
-                            var objparam1 = JSON.stringify(lines);
-                            var objparam2 = JSON.stringify(searchParams);
+                                var shTask = task.create({
+                                    taskType: task.TaskType.MAP_REDUCE,
+                                    scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
+                                    deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID,
+                                    params: {
+                                        "custscript_ss_lines": objparam1, //"custscript_params1": objparam1,
+                                        "custscript_ss_params": objparam2, //"custscript_params2": objparam2
+                                        "custscript_tkio_is_gnc_mr": isGNC
+                                    }
+                                });
+                                if (isGNC) {
+                                    shTask.submit();
 
-
-                            if (searchParams.file !== 'T') {
-                                log.debug({ title: 'objparam1', details: objparam1 });
-                                log.debug({ title: 'objparam2', details: objparam2 });
-                                //Create task to call scheduled script
-                                // var shTask = task.create({
-                                //     taskType: task.TaskType.MAP_REDUCE,
-                                //     scriptId: SCRIPTS.SCHEDULED_SCRIPT.SCRIPT_ID,
-                                //     deploymentId: SCRIPTS.SCHEDULED_SCRIPT.DEPLOY_ID,
-                                //     params: {
-                                //         "custscript_ss_lines": objparam1, //"custscript_params1": objparam1,
-                                //         "custscript_ss_params": objparam2, //"custscript_params2": objparam2
-                                //         "custscript_tkio_is_gnc_mr": isGNC
-                                //     }
-                                // });
-                                // if (isGNC) {
-                                //     shTask.submit();
-                                //     redirect.toTaskLink({
-                                //         id: 'LIST_MAPREDUCESCRIPTSTATUS'
-                                //     });
-                                // } else {
-                                //     var idtask = shTask.submit();
-                                //     var otherId = record.submitFields({
-                                //         type: record.Type.SCRIPT_DEPLOYMENT,
-                                //         id: deploymentId,
-                                //         values: {
-                                //             'custscript_tkio_tak': idtask
-                                //         }
-                                //     });
-                                //     redirect.toSuitelet({
-                                //         scriptId: 'customscript_tkio_cs_cancel_amount_sl',
-                                //         deploymentId: 'customdeploy_tkio_cs_cancel_amount_sl'
-                                //     });
-                                // }
-
+                                    redirect.toTaskLink({
+                                        id: 'LIST_MAPREDUCESCRIPTSTATUS'
+                                    });
+                                } else {
+                                    var idtask = shTask.submit();
+                                    var otherId = record.submitFields({ type: record.Type.SCRIPT_DEPLOYMENT, id: deploymentId, values: { 'custscript_tkio_tak': idtask } });
+                                    redirect.toSuitelet({
+                                        scriptId: 'customscript_tkio_cs_cancel_amount_sl',
+                                        deploymentId: 'customdeploy_tkio_cs_cancel_amount_sl'
+                                    });
+                                }
                             }
                         } else {
                             var csv = '';
@@ -509,7 +696,6 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             } else {
                                 csv = ' ID interno, Fecha, No. Transaccion, Tipo, Subsidiaria, Cliente, Cuenta, Monto, Monto adeudado \r\n';
                             }
-                            var tranResults = GetTransactions(searchParams, isGNC);
                             log.audit({ title: 'tranResults', details: tranResults });
                             log.debug({ title: 'form', details: form.title });
                             if (!isGNC) {
@@ -519,29 +705,18 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                                 totalTransactions.defaultValue = tranResults.length;
                             }
                             if (tranResults.length && isGNC) {
-                                subList.addButton({
-                                    id: 'custpage_excel',
-                                    label: 'Descargar Archivo',
-                                    functionName: 'excel'
-                                });
-                                subList.addButton({
-                                    id: 'custpage_check_all',
-                                    label: 'Marcar todo',
-                                    functionName: 'checkAll'
-                                });
-                                subList.addButton({
-                                    id: 'custpage_uncheck_all',
-                                    label: 'Desmarcar todo',
-                                    functionName: 'uncheckAll'
-                                });
+                                subList.addButton({ id: 'custpage_excel', label: 'Descargar Archivo', functionName: 'excel' });
+                                subList.addButton({ id: 'custpage_check_all', label: 'Marcar todo', functionName: 'checkAll' });
+                                subList.addButton({ id: 'custpage_uncheck_all', label: 'Desmarcar todo', functionName: 'uncheckAll' });
                             }
                             //Parametros auxiliares para mandarlos por URL
                             var parametros = form.getField({
                                 id: CUSTOM_FIELDS.PARAMS
                             })
                             parametros.defaultValue = JSON.stringify(paramsField);
+
                             //Division por bloques
-                            var resultados = bloques(tranResults);
+                            var resultados = bloques(tranResults, 100);
 
                             var campoPag = form.addField({
                                 id: 'custpage_pagination',
@@ -558,24 +733,51 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                             })
                             var indice = serverRequest.parameters.custpage_pagination ?? 0;
                             campoPag.defaultValue = indice;
-                            tranResults = resultados[indice];
+                            log.debug({ title: 'No tranResults', details: tranResults.length });
+                            tranResults = (tranResults.length > 0 ? resultados[indice] : []);
 
                             log.debug({ title: 'Bloques', details: resultados });
                             log.debug({ title: 'tranResults', details: tranResults });
 
 
-                            log.debug({ title: 'No tranResults', details: tranResults.length });
+                            //Parametros de validacion de CHECKALL o UNCHECKALL
+                            let marcaTodo = serverRequest.parameters.custpage_checkall || 'T';
+                            let desMarcaTodo = serverRequest.parameters.custpage_uncheckall;
+                            log.audit({ title: 'Parametros', details: serverRequest.parameters });
+                            //IDS de las lineas seleccionadas
+                            let arrIdItems = (serverRequest.parameters.custpage_idtrand ? (serverRequest.parameters.custpage_idtrand).split(',') : []);
+                            arrIdItems = arrIdItems.filter(item => item !== '');
+
                             for (var t = 0; t < tranResults.length; t++) {
                                 //log.debug({ title: 'fieldObject[' + t + ']', details: fieldObject });
                                 var fieldObject = tranResults[t];
                                 for (var key in fieldObject) {
-                                    if (fieldObject[key] && isGNC) {
+                                    //Condiciones para determinar cual linea ha sido seleccionada o no
+                                    if (key === 'custpage_list_select' && desMarcaTodo === 'T') {
+                                        if (arrIdItems.includes(fieldObject[CUSTOM_LISTS.INTERNAL_ID])) {
+                                            subList.setSublistValue({
+                                                id: key,
+                                                line: t,
+                                                value: 'T'
+                                            });
+                                        }
+                                    } else if (key === 'custpage_list_select' && marcaTodo === 'T') {
+                                        if (!arrIdItems.includes(fieldObject[CUSTOM_LISTS.INTERNAL_ID])) {
+                                            subList.setSublistValue({
+                                                id: key,
+                                                line: t,
+                                                value: 'T'
+                                            });
+                                        }
+                                    }
+                                    //Colocar el resto de campos en la lista
+                                    if (fieldObject[key] && isGNC && key !== 'custpage_list_select') {
                                         subList.setSublistValue({
                                             id: key,
                                             line: t,
                                             value: fieldObject[key]
                                         });
-                                    } else {
+                                    } else if (key !== 'custpage_list_select') {
                                         subList.setSublistValue({
                                             id: key,
                                             line: t,
@@ -583,21 +785,31 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                                         });
                                     }
                                 }
-                                csv += fieldObject[CUSTOM_FIELDS.LISTS.INTERNAL_ID];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.DATE];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.NUMBER];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.TRANS_TYPE];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.SUBSIDIARY];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.NAME + "_text"];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.ACCOUNT + "_text"];
-                                if (isGNC) {
-                                    csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.PAYMENT_METHOD];
-                                }
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.AMOUNT];
-                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING];
-                                csv += '\r\n';
                             }
                             if (searchParams.file === 'T') {
+                                //Funcion para descargar el archivo completo CSV
+                                if (isGNC) {
+                                    for (var j = 0; j < resultados.length; j++) {
+                                        let pag = resultados[j];
+                                        for (var t = 0; t < pag.length; t++) {
+                                            //log.debug({ title: 'fieldObject[' + t + ']', details: fieldObject });
+                                            var fieldObject = pag[t];
+                                            csv += fieldObject[CUSTOM_FIELDS.LISTS.INTERNAL_ID];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.DATE];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.NUMBER];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.TRANS_TYPE];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.SUBSIDIARY];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.NAME + "_text"];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.ACCOUNT + "_text"];
+                                            if (isGNC) {
+                                                csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.PAYMENT_METHOD];
+                                            }
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.AMOUNT];
+                                            csv += ',' + fieldObject[CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING];
+                                            csv += '\r\n';
+                                        }
+                                    }
+                                }
                                 log.debug('csv', csv);
                                 var fileObj = file.create({
                                     name: 'resultados.csv',
@@ -634,199 +846,88 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
             }
         }
 
+
         function createPanel(isGNC, form, serverRequest, status) {
             try {
                 //add principal filters
-                form.addFieldGroup({
-                    id: CUSTOM_FIELDS.PRIMARY,
-                    label: 'Filtros principales'
-                });
+                form.addFieldGroup({ id: CUSTOM_FIELDS.PRIMARY, label: 'Filtros principales' });
 
                 //add secondary filters || pagination
-                form.addFieldGroup({
-                    id: CUSTOM_FIELDS.SECONDARY,
-                    label: (isGNC ? 'Filtros secundarios' : 'Paginación')
-                });
+                form.addFieldGroup({ id: CUSTOM_FIELDS.SECONDARY, label: (isGNC ? 'Filtros secundarios' : 'Paginación') });
                 //Validatio for instance GNC
                 if (isGNC) {
                     // add customer
-                    var customerField = form.addField({
-                        id: CUSTOM_FIELDS.CUSTOMER,
-                        type: serverWidget.FieldType.SELECT,
-                        label: 'Cliente',
-                        source: RECORDS.CUSTOMER,
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var customerField = form.addField({ id: CUSTOM_FIELDS.CUSTOMER, type: serverWidget.FieldType.SELECT, label: 'Cliente', source: RECORDS.CUSTOMER, container: CUSTOM_FIELDS.PRIMARY });
                     // add subsidiary || company
-                    var subsidiaryField = form.addField({
-                        id: CUSTOM_FIELDS.SUBSIDIARY,
-                        type: serverWidget.FieldType.SELECT,
-                        label: 'Compañia',
-                        source: RECORDS.SUBSIDIARY,
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var subsidiaryField = form.addField({ id: CUSTOM_FIELDS.SUBSIDIARY, type: serverWidget.FieldType.SELECT, label: 'Compañia', source: RECORDS.SUBSIDIARY, container: CUSTOM_FIELDS.PRIMARY });
                     //add category
-                    var customerCategoryField = form.addField({
-                        id: CUSTOM_FIELDS.CUSTOMER_CATEGORY,
-                        type: serverWidget.FieldType.SELECT,
-                        label: 'Categoría de Cliente',
-                        source: RECORDS.CUSTOMER_CATEGORY,
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var customerCategoryField = form.addField({ id: CUSTOM_FIELDS.CUSTOMER_CATEGORY, type: serverWidget.FieldType.SELECT, label: 'Categoría de Cliente', source: RECORDS.CUSTOMER_CATEGORY, container: CUSTOM_FIELDS.PRIMARY });
                     // add transaction types
-                    var transactionTypeField = form.addField({
-                        id: CUSTOM_FIELDS.TRAN_TYPE,
-                        type: serverWidget.FieldType.MULTISELECT,
-                        label: 'Tipo de transacción',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var transactionTypeField = form.addField({ id: CUSTOM_FIELDS.TRAN_TYPE, type: serverWidget.FieldType.MULTISELECT, label: 'Tipo de transacción', container: CUSTOM_FIELDS.PRIMARY });
                     //add date ranges
-                    var tranDateField = form.addField({
-                        id: CUSTOM_FIELDS.TRAN_DATE,
-                        type: serverWidget.FieldType.DATE,
-                        label: 'Fecha contable',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
-
+                    var tranDateField = form.addField({ id: CUSTOM_FIELDS.TRAN_DATE, type: serverWidget.FieldType.DATE, label: 'Fecha contable', container: CUSTOM_FIELDS.PRIMARY });
                     tranDateField.isMandatory = true;
                     tranDateField.defaultValue = new Date();
                     // add date ranges
-                    var startDateField = form.addField({
-                        id: CUSTOM_FIELDS.START_DATE,
-                        type: serverWidget.FieldType.DATE,
-                        label: 'Fecha inicio',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
-                    var endDateField = form.addField({
-                        id: CUSTOM_FIELDS.END_DATE,
-                        type: serverWidget.FieldType.DATE,
-                        label: 'Fecha fin',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var startDateField = form.addField({ id: CUSTOM_FIELDS.START_DATE, type: serverWidget.FieldType.DATE, label: 'Fecha inicio', container: CUSTOM_FIELDS.PRIMARY });
+                    var endDateField = form.addField({ id: CUSTOM_FIELDS.END_DATE, type: serverWidget.FieldType.DATE, label: 'Fecha fin', container: CUSTOM_FIELDS.PRIMARY });
                     // add amount ranges
-                    var startAmountField = form.addField({
-                        id: CUSTOM_FIELDS.START_AMT,
-                        type: serverWidget.FieldType.CURRENCY,
-                        label: 'Monto Inicio',
-                        container: CUSTOM_FIELDS.SECONDARY
-                    });
+                    var startAmountField = form.addField({ id: CUSTOM_FIELDS.START_AMT, type: serverWidget.FieldType.CURRENCY, label: 'Monto Inicio', container: CUSTOM_FIELDS.SECONDARY });
                     startAmountField.isMandatory = true;
-
-                    var endAmountField = form.addField({
-                        id: CUSTOM_FIELDS.END_AMT,
-                        type: serverWidget.FieldType.CURRENCY,
-                        label: 'Monto Fin',
-                        container: CUSTOM_FIELDS.SECONDARY
-                    });
-                    var reasonField = form.addField({
-                        id: CUSTOM_FIELDS.REASON,
-                        type: serverWidget.FieldType.TEXTAREA,
-                        label: 'Razones',
-                        container: CUSTOM_FIELDS.SECONDARY
-                    });
-
-                    var fileField = form.addField({
-                        id: CUSTOM_FIELDS.FILE,
-                        type: serverWidget.FieldType.TEXTAREA,
-                        label: 'Generar archivo',
-                        container: CUSTOM_FIELDS.SECONDARY
-                    }).updateDisplayType({
-                        displayType: serverWidget.FieldDisplayType.HIDDEN
-                    });
-
-
+                    var endAmountField = form.addField({ id: CUSTOM_FIELDS.END_AMT, type: serverWidget.FieldType.CURRENCY, label: 'Monto Fin', container: CUSTOM_FIELDS.SECONDARY });
+                    var reasonField = form.addField({ id: CUSTOM_FIELDS.REASON, type: serverWidget.FieldType.TEXTAREA, label: 'Razones', container: CUSTOM_FIELDS.SECONDARY });
+                    var fileField = form.addField({ id: CUSTOM_FIELDS.FILE, type: serverWidget.FieldType.TEXTAREA, label: 'Generar archivo', container: CUSTOM_FIELDS.SECONDARY }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
                     form.addSubmitButton({
                         label: 'Ejecutar'
                     });
                 } else {
                     // add subsidiary || company
-                    var subsidiaryField = form.addField({
-                        id: CUSTOM_FIELDS.SUBSIDIARY,
-                        type: serverWidget.FieldType.SELECT,
-                        label: 'Subsidiaria',
-                        source: RECORDS.SUBSIDIARY,
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var subsidiaryField = form.addField({ id: CUSTOM_FIELDS.SUBSIDIARY, type: serverWidget.FieldType.SELECT, label: 'Subsidiaria', source: RECORDS.SUBSIDIARY, container: CUSTOM_FIELDS.PRIMARY });
                     subsidiaryField.defaultValue = (serverRequest.parameters[CUSTOM_FIELDS.SUBSIDIARY]) ? serverRequest.parameters[CUSTOM_FIELDS.SUBSIDIARY] : '';
 
                     // add transaction types
-                    var transactionTypeField = form.addField({
-                        id: CUSTOM_FIELDS.TRAN_TYPE,
-                        type: serverWidget.FieldType.MULTISELECT,
-                        label: 'Tipo de transacción',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var transactionTypeField = form.addField({ id: CUSTOM_FIELDS.TRAN_TYPE, type: serverWidget.FieldType.MULTISELECT, label: 'Tipo de transacción', container: CUSTOM_FIELDS.PRIMARY });
                     // add subsidiary
-                    var customerField = form.addField({
-                        id: CUSTOM_FIELDS.CUSTOMER,
-                        type: serverWidget.FieldType.MULTISELECT,
-                        label: 'Cliente',
-                        source: RECORDS.CUSTOMER,
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var customerField = form.addField({ id: CUSTOM_FIELDS.CUSTOMER, type: serverWidget.FieldType.MULTISELECT, label: 'Cliente', source: RECORDS.CUSTOMER, container: CUSTOM_FIELDS.PRIMARY });
                     // add date ranges
-                    var startDateField = form.addField({
-                        id: CUSTOM_FIELDS.START_DATE,
-                        type: serverWidget.FieldType.DATE,
-                        label: 'Fecha inicio',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var startDateField = form.addField({ id: CUSTOM_FIELDS.START_DATE, type: serverWidget.FieldType.DATE, label: 'Fecha inicio', container: CUSTOM_FIELDS.PRIMARY });
                     startDateField.defaultValue = (serverRequest.parameters[CUSTOM_FIELDS.START_DATE]) ? serverRequest.parameters[CUSTOM_FIELDS.START_DATE] : '';
 
-                    var endDateField = form.addField({
-                        id: CUSTOM_FIELDS.END_DATE,
-                        type: serverWidget.FieldType.DATE,
-                        label: 'Fecha fin',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var endDateField = form.addField({ id: CUSTOM_FIELDS.END_DATE, type: serverWidget.FieldType.DATE, label: 'Fecha fin', container: CUSTOM_FIELDS.PRIMARY });
                     endDateField.defaultValue = (serverRequest.parameters[CUSTOM_FIELDS.END_DATE]) ? serverRequest.parameters[CUSTOM_FIELDS.END_DATE] : '';
 
-                    var endAmountField = form.addField({
-                        id: CUSTOM_FIELDS.END_AMT,
-                        type: serverWidget.FieldType.CURRENCY,
-                        label: 'Rango tolerancia',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var endAmountField = form.addField({ id: CUSTOM_FIELDS.END_AMT, type: serverWidget.FieldType.CURRENCY, label: 'Rango tolerancia', container: CUSTOM_FIELDS.PRIMARY });
 
                     var defaulttolerance = runtime.getCurrentScript().getParameter({ name: 'custscript_tkio_cs_tolerancia' });
                     log.audit({ title: 'defaulttolerance', details: defaulttolerance });
                     log.debug({ title: 'serverRequest.parameters', details: serverRequest.parameters });
                     endAmountField.defaultValue = (serverRequest.parameters[CUSTOM_FIELDS.END_AMT]) ? serverRequest.parameters[CUSTOM_FIELDS.END_AMT] : defaulttolerance;
 
-                    var totalTransactions = form.addField({
-                        id: CUSTOM_FIELDS.TOTAL_TRANS,
-                        type: serverWidget.FieldType.INTEGER,
-                        label: 'Total de transacciones',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var totalTransactions = form.addField({ id: CUSTOM_FIELDS.TOTAL_TRANS, type: serverWidget.FieldType.INTEGER, label: 'Total de transacciones', container: CUSTOM_FIELDS.PRIMARY });
                     totalTransactions.updateDisplayType({ displayType: serverWidget.FieldDisplayType.INLINE });
 
-                    var message = form.addField({
-                        id: CUSTOM_FIELDS.MESSAGE,
-                        type: serverWidget.FieldType.TEXT,
-                        label: 'Mensajes',
-                        container: CUSTOM_FIELDS.PRIMARY
-                    });
+                    var message = form.addField({ id: CUSTOM_FIELDS.MESSAGE, type: serverWidget.FieldType.TEXT, label: 'Mensajes', container: CUSTOM_FIELDS.PRIMARY });
                     message.updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
 
                     log.debug("status", status);
                     // add submit button
                     if ((status.status == "COMPLETE" || status.status == "FAILED" || !status.status) && !status.stage) {
-                        form.addSubmitButton({
-                            label: 'Ejecutar'
-                        });
+                        form.addSubmitButton({ label: 'Ejecutar' });
                     }
                     else {
                         message.defaultValue = "Se está ejecutando un proceso de cancelación, espere un momento por favor";
                     }
                     // add reset button
-                    form.addButton({
-                        id: 'custpage_filter',
-                        label: 'Filtrar',
-                        functionName: 'filter'
-                    });
+                    form.addButton({ id: 'custpage_filter', label: 'Filtrar', functionName: 'filter' });
                 }
+                log.audit({ title: 'Parametros', details: serverRequest.parameters });
                 log.debug("TRAN_TYPE", serverRequest.parameters[CUSTOM_FIELDS.TRAN_TYPE]);
+                var idsTransacciones = form.addField({ id: CUSTOM_FIELDS.ID_TRAND, type: serverWidget.FieldType.TEXTAREA, label: 'IDS TRANSACCIONES', container: CUSTOM_FIELDS.SECONDARY }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
+                var idsTot = form.addField({ id: CUSTOM_FIELDS.CHECK_ALL, type: serverWidget.FieldType.CHECKBOX, label: 'Marcar todo', container: CUSTOM_FIELDS.SECONDARY }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
+                idsTot.defaultValue = 'T'
+                var idsTot = form.addField({ id: CUSTOM_FIELDS.UNCHECK_ALL, type: serverWidget.FieldType.CHECKBOX, label: 'Desmarcar todo', container: CUSTOM_FIELDS.SECONDARY }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
+                var eject = form.addField({ id: CUSTOM_FIELDS.EJECT, type: serverWidget.FieldType.CHECKBOX, label: 'EJECUTAR', container: CUSTOM_FIELDS.SECONDARY }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
+                eject.defaultValue = 'T'
                 transactionTypeField = addValuesTransactionTypeField(transactionTypeField, customerField, isGNC, serverRequest);
                 subsidiaryField.isMandatory = true;
                 transactionTypeField.isMandatory = true;
@@ -838,10 +939,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                     type: serverWidget.FieldType.TEXTAREA,
                     label: 'Parametros',
                     container: CUSTOM_FIELDS.SECONDARY
-                })
-                    .updateDisplayType({
-                        displayType: serverWidget.FieldDisplayType.HIDDEN
-                    });
+                }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.HIDDEN });
                 // add reset button
                 form.addButton({
                     id: 'custpage_reload',
@@ -853,15 +951,118 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                 log.error({ title: 'Error createPanel: ', details: error });
             }
         }
-        //Divide el arreglo principal en bloques para seccionar y paginar la tabla
-        function bloques(data) {
+        function generateLinesEject(resultadosBG, idNoSet, marcaTodo, desMarcaTodo, isGNC, params) {
             try {
-                const BLOCK_RESULTS = 100;
+                let newTranResult = [];
+                resultadosBG.forEach(trndPib => {
+                    var fieldObject = trndPib;
+                    var validacionCA = (marcaTodo === 'T' ? true : false)
+                    var validacionUA = (desMarcaTodo === 'T' ? true : false)
+
+                    if (!idNoSet.includes(fieldObject[CUSTOM_FIELDS.LISTS.INTERNAL_ID]) && validacionCA) {
+                        var lineItems = {};
+                        lineItems[TRANSACTION_BODY.INTERNAL_ID] = fieldObject[CUSTOM_FIELDS.LISTS.INTERNAL_ID];
+                        var name = fieldObject[CUSTOM_FIELDS.LISTS.TRANS_TYPE];
+                        var type = 0;
+                        var typeentity = 0;
+                        if (name === 'Factura de venta') {
+                            type = 7;
+                            typeentity = 1;
+                        } else if (name === 'Pago de cliente') {
+                            type = 9;
+                            typeentity = 1;
+                        } else if (name === 'Nota de crédito cliente') {
+                            type = 11;
+                            typeentity = 1;
+                        } else if (name === 'Factura de proveedor') {
+                            type = 13;
+                            typeentity = 2;
+                        } else if (name === 'Nota de crédito proveedor') {
+                            type = 15;
+                            typeentity = 2;
+                        }
+                        lineItems[TRANSACTION_BODY.TYPE] = type;
+                        lineItems[TRANSACTION_BODY.TYPE_ENTITY] = typeentity;
+                        lineItems[TRANSACTION_BODY.NAME] = fieldObject[CUSTOM_FIELDS.LISTS.NAME];
+                        lineItems[TRANSACTION_BODY.ACCOUNT] = fieldObject[CUSTOM_FIELDS.LISTS.ACCOUNT];
+                        lineItems[TRANSACTION_BODY.AMOUNT_REMAINING] = fieldObject[CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING];
+                        if (isGNC) {
+                            lineItems[TRANSACTION_BODY.PAYMENT_METHOD] = fieldObject[CUSTOM_FIELDS.LISTS.PAYMENT_METHOD];
+                            lineItems[TRANSACTION_BODY.DEPARTMENT] = fieldObject[CUSTOM_FIELDS.LISTS.DEPARTMENT];
+                            lineItems[TRANSACTION_BODY.CLASS] = fieldObject[CUSTOM_FIELDS.LISTS.CLASS];
+                            lineItems[TRANSACTION_BODY.INTERCOMPANY] = fieldObject[CUSTOM_FIELDS.LISTS.INTERCOMPANY];
+                            lineItems[TRANSACTION_BODY.SUBSIDIARY] = params[CUSTOM_FIELDS.SUBSIDIARY]
+                        }
+                        else {
+                            lineItems[TRANSACTION_BODY.TRAN_ID] = fieldObject[CUSTOM_FIELDS.LISTS.NUMBER];
+                            var inactive = fieldObject[CUSTOM_FIELDS.LISTS.IS_INACTIVE];
+                            lineItems[TRANSACTION_BODY.IS_INACTIVE] = (inactive == 'No' || inactive == 'NO') ? false : true;
+                            lineItems[TRANSACTION_BODY.SUBSIDIARY] = fieldObject[CUSTOM_FIELDS.LISTS.SUBSIDIARY_ID];
+                        }
+                        newTranResult.push(lineItems);
+                    }
+                    if (idNoSet.includes(fieldObject[CUSTOM_FIELDS.LISTS.INTERNAL_ID]) && validacionUA) {
+                        var lineItems = {};
+                        lineItems[TRANSACTION_BODY.INTERNAL_ID] = fieldObject[CUSTOM_FIELDS.LISTS.INTERNAL_ID];
+                        var name = fieldObject[CUSTOM_FIELDS.LISTS.TRANS_TYPE];
+                        var type = 0;
+                        var typeentity = 0;
+                        if (name === 'Factura de venta') {
+                            type = 7;
+                            typeentity = 1;
+                        } else if (name === 'Pago de cliente') {
+                            type = 9;
+                            typeentity = 1;
+                        } else if (name === 'Nota de crédito cliente') {
+                            type = 11;
+                            typeentity = 1;
+                        } else if (name === 'Factura de proveedor') {
+                            type = 13;
+                            typeentity = 2;
+                        } else if (name === 'Nota de crédito proveedor') {
+                            type = 15;
+                            typeentity = 2;
+                        }
+                        lineItems[TRANSACTION_BODY.TYPE] = type;
+                        lineItems[TRANSACTION_BODY.TYPE_ENTITY] = typeentity;
+                        lineItems[TRANSACTION_BODY.NAME] = fieldObject[CUSTOM_FIELDS.LISTS.NAME];
+                        lineItems[TRANSACTION_BODY.ACCOUNT] = fieldObject[CUSTOM_FIELDS.LISTS.ACCOUNT];
+                        lineItems[TRANSACTION_BODY.AMOUNT_REMAINING] = fieldObject[CUSTOM_FIELDS.LISTS.AMOUNT_REMAINING];
+                        if (isGNC) {
+                            lineItems[TRANSACTION_BODY.PAYMENT_METHOD] = fieldObject[CUSTOM_FIELDS.LISTS.PAYMENT_METHOD];
+                            lineItems[TRANSACTION_BODY.DEPARTMENT] = fieldObject[CUSTOM_FIELDS.LISTS.DEPARTMENT];
+                            lineItems[TRANSACTION_BODY.CLASS] = fieldObject[CUSTOM_FIELDS.LISTS.CLASS];
+                            lineItems[TRANSACTION_BODY.INTERCOMPANY] = fieldObject[CUSTOM_FIELDS.LISTS.INTERCOMPANY];
+                            lineItems[TRANSACTION_BODY.SUBSIDIARY] = params[CUSTOM_FIELDS.SUBSIDIARY]
+                        }
+                        else {
+                            lineItems[TRANSACTION_BODY.TRAN_ID] = fieldObject[CUSTOM_FIELDS.LISTS.NUMBER];
+                            var inactive = fieldObject[CUSTOM_FIELDS.LISTS.IS_INACTIVE];
+                            lineItems[TRANSACTION_BODY.IS_INACTIVE] = (inactive == 'No' || inactive == 'NO') ? false : true;
+                            lineItems[TRANSACTION_BODY.SUBSIDIARY] = fieldObject[CUSTOM_FIELDS.LISTS.SUBSIDIARY_ID];
+                        }
+                        newTranResult.push(lineItems);
+                    }
+                })
+                // log.audit({ title: 'Total de lineas seleccionadas', details: newTranResult.length });
+                // log.audit({ title: 'Total de resultados', details: resultadosBG.length });
+                return newTranResult;
+            } catch (e) {
+                log.error({ title: 'Error generateLinesEject:', details: e });
+                return [];
+            }
+        }
+        //Divide el arreglo principal en bloques para seccionar y paginar la tabla
+        function bloques(data, bloq) {
+            try {
+                const BLOCK_RESULTS = bloq;
                 log.audit('getInputData ~ BLOCK_RESULTS:', BLOCK_RESULTS)
                 const BLOCKS_DATA = []
                 for (let i = 0; i < data.length; i += BLOCK_RESULTS) {
                     const block = data.slice(i, i + BLOCK_RESULTS)
-                    BLOCKS_DATA.push(block)
+                    if (block.length > 0) {
+                        BLOCKS_DATA.push(block)
+                    }
                 }
                 return BLOCKS_DATA
             } catch (e) {
@@ -870,6 +1071,7 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
         }
         function addDataRequest(form, parametrosFunction) {
             try {
+                log.audit({ title: 'parametrosFunction', details: parametrosFunction });
                 if (parametrosFunction) {
                     var parametrosJson = JSON.parse(parametrosFunction);
                     for (var key in parametrosJson) {
@@ -886,29 +1088,44 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
             }
         }
         //Set selected values
-        function setValueSelect(form, searchParams) {
+        function setValueSelect(form, searchParams, eje, isGNC) {
             try {
+                log.audit({ title: 'searchParams setValuesublist', details: searchParams });
                 // set selected values
                 var customerField = form.getField(CUSTOM_FIELDS.CUSTOMER);
                 customerField.defaultValue = searchParams.customer;
-                var customerCategoryField = form.getField(CUSTOM_FIELDS.CUSTOMER_CATEGORY);
-                customerCategoryField.defaultValue = searchParams.customerCategory;
                 var subsidiaryField = form.getField(CUSTOM_FIELDS.SUBSIDIARY);
                 subsidiaryField.defaultValue = searchParams.subsidiary;
                 var transactionTypeField = form.getField(CUSTOM_FIELDS.TRAN_TYPE);
                 transactionTypeField.defaultValue = searchParams.transaction_type;
-                var tranDateField = form.getField(CUSTOM_FIELDS.TRAN_DATE);
-                tranDateField.defaultValue = searchParams.trandate;
                 var startDateField = form.getField(CUSTOM_FIELDS.START_DATE);
                 startDateField.defaultValue = searchParams.startdate;
                 var endDateField = form.getField(CUSTOM_FIELDS.END_DATE);
                 endDateField.defaultValue = searchParams.enddate;
-                var startAmountField = form.getField(CUSTOM_FIELDS.START_AMT);
-                startAmountField.defaultValue = searchParams.start_amt;
-                var endAmountField = form.getField(CUSTOM_FIELDS.END_AMT);
-                endAmountField.defaultValue = searchParams.end_amt;
-                var reasonField = form.getField(CUSTOM_FIELDS.REASON);
-                reasonField.defaultValue = searchParams.reason;
+
+                var ids = form.getField(CUSTOM_FIELDS.ID_TRAND);
+                ids.defaultValue = searchParams.custpage_idtrand;
+                var checkAll = form.getField(CUSTOM_FIELDS.CHECK_ALL);
+                checkAll.defaultValue = searchParams.custpage_checkall;
+                var checkAll = form.getField(CUSTOM_FIELDS.CHECK_ALL);
+                log.audit({title: 'checkAll', details: {parametros: searchParams, ValorCampo: checkAll}});
+                
+                var uncheckAll = form.getField(CUSTOM_FIELDS.UNCHECK_ALL);
+                uncheckAll.defaultValue = searchParams.custpage_uncheckall;
+                if (isGNC) {
+                    var reasonField = form.getField(CUSTOM_FIELDS.REASON);  // GNC
+                    reasonField.defaultValue = searchParams.reason;
+                    var startAmountField = form.getField(CUSTOM_FIELDS.START_AMT); // GNC
+                    startAmountField.defaultValue = searchParams.start_amt;
+                    var endAmountField = form.getField(CUSTOM_FIELDS.END_AMT); // GNC
+                    endAmountField.defaultValue = searchParams.end_amt;
+                    var tranDateField = form.getField(CUSTOM_FIELDS.TRAN_DATE);  // GNC
+                    tranDateField.defaultValue = searchParams.trandate;
+                    var customerCategoryField = form.getField(CUSTOM_FIELDS.CUSTOMER_CATEGORY); // GNC
+                    customerCategoryField.defaultValue = searchParams.customerCategory;
+                }
+                // var ejecutar = form.getField(CUSTOM_FIELDS.EJECT);
+                // ejecutar.defaultValue = (searchParams.custpage_eject ? 'T' : 'F');
                 return form
 
             } catch (error) {
@@ -964,12 +1181,12 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                     label: 'Transacciones'
                 });
                 if (isGNC) {
-                    // Sublist Fields
                     transactionList.addField({
                         id: CUSTOM_FIELDS.LISTS.SELECT,
                         type: serverWidget.FieldType.CHECKBOX,
                         label: 'Select'
                     });
+                    // Sublist Fields
                     transactionList.addField({
                         id: CUSTOM_FIELDS.LISTS.DATE,
                         type: serverWidget.FieldType.DATE,
@@ -1041,8 +1258,16 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
                         source: 'customrecord_csegefxintercompani'
                     }).updateDisplayType({ displayType: serverWidget.FieldDisplayType.DISABLED });
                 } else {
-                    transactionList.addMarkAllButtons();
-                    // Sublist Fields
+                    // transactionList.addMarkAllButtons();
+                    // // Sublist Fields
+                    // transactionList.addField({
+                    //     id: CUSTOM_FIELDS.LISTS.SELECT,
+                    //     type: serverWidget.FieldType.CHECKBOX,
+                    //     label: ' '
+                    // });
+                    transactionList.addButton({ id: 'custpage_check_all', label: 'Marcar todo', functionName: 'checkAll' });
+                    transactionList.addButton({ id: 'custpage_uncheck_all', label: 'Desmarcar todo', functionName: 'uncheckAll' });
+                    
                     transactionList.addField({
                         id: CUSTOM_FIELDS.LISTS.SELECT,
                         type: serverWidget.FieldType.CHECKBOX,
@@ -1192,6 +1417,10 @@ define(['N/search', 'N/ui/serverWidget', 'N/task', 'N/redirect', 'N/file', 'N/ru
 
                     recordFilters.push("AND", [TRANSACTION_BODY.TYPE, search.Operator.ANYOF, RECORDS.CUSTOMER_PAYMENT_SHORT])
                     recordFilters.push("AND", [TRANSACTION_BODY.MAINLINE, search.Operator.IS, "F"]);
+                    if (isGNC) {
+                        recordFilters.push('AND', [TRANSACTION_BODY.TYPE_AJUST, search.Operator.ANYOF, '2']);
+                    }
+                    // recordFilters.push("AND", [["custbody_pago_adjusment", search.Operator.NONEOF, ["adjustment"]]]);
 
                     var paymentSearchFilters = searchFilters.concat(recordFilters)
                     log.debug("recordFilters", recordFilters);
